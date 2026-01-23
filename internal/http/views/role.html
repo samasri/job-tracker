@@ -1,0 +1,65 @@
+{{define "content"}}
+<h1>{{.Role.Title}}</h1>
+<p>
+    <a href="/companies/{{.Company.Slug}}">{{.Company.Name}}</a> / {{.Role.Slug}}
+</p>
+<p>
+    <span class="path-display">{{.Role.FolderPath}}</span>
+</p>
+
+{{if .Success}}
+<div class="alert alert-success">{{.Success}}</div>
+{{end}}
+{{if .Error}}
+<div class="alert alert-error">{{.Error}}</div>
+{{end}}
+
+<h2>Status</h2>
+<div class="card">
+    <form action="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/status" method="POST" class="inline-form">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="status">Current Status</label>
+                <select id="status" name="status">
+                    {{range .AllStatuses}}
+                    <option value="{{.Value}}" {{if eq .Value $.Role.Status.String}}selected{{end}}>{{.Label}}</option>
+                    {{end}}
+                </select>
+            </div>
+            <button type="submit">Update Status</button>
+        </div>
+    </form>
+</div>
+
+<h2>Job Description</h2>
+{{if or .JD.PathHTML .JD.PathPDF}}
+<div class="card">
+    {{if .JD.PathHTML}}
+    <p><strong>HTML:</strong> <span class="path-display">{{.JD.PathHTML}}</span></p>
+    {{end}}
+    {{if .JD.PathPDF}}
+    <p><strong>PDF:</strong> <span class="path-display">{{.JD.PathPDF}}</span></p>
+    {{end}}
+</div>
+{{else}}
+<div class="card">
+    <p>No job description attached yet. Add one below.</p>
+</div>
+{{end}}
+
+<div class="form-section">
+    <h3>Attach Job Description</h3>
+    <form action="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/jd" method="POST" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="html">HTML Content</label>
+            <textarea id="html" name="html" placeholder="Paste job description HTML here..."></textarea>
+            <small>You can paste raw HTML or plain text (will be wrapped in HTML)</small>
+        </div>
+        <div class="form-group">
+            <label for="pdf">PDF File (optional)</label>
+            <input type="file" id="pdf" name="pdf" accept=".pdf">
+        </div>
+        <button type="submit">Attach JD</button>
+    </form>
+</div>
+{{end}}

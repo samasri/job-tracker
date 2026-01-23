@@ -1,0 +1,109 @@
+{{define "content"}}
+<h1>{{.Company.Name}}</h1>
+<p>
+    {{if .Status}}
+    <span class="status status-{{.Status | statusClass}}">{{.Status}}</span>
+    {{end}}
+    <span class="path-display">{{.Company.FolderPath}}</span>
+</p>
+
+<h2>Roles</h2>
+{{if .Roles}}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Slug</th>
+                <th>Path</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Roles}}
+            <tr>
+                <td><a href="/companies/{{$.Company.Slug}}/roles/{{.Slug}}">{{.Title}}</a></td>
+                <td><span class="status status-{{.Status.String | statusClass}}">{{.Status.String}}</span></td>
+                <td>{{.Slug}}</td>
+                <td><span class="path-display">{{.FolderPath}}</span></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<div class="card">
+    <p>No roles yet. Add one below.</p>
+</div>
+{{end}}
+
+<div class="form-section">
+    <h3>Add Role</h3>
+    <form action="/companies/{{.Company.Slug}}/roles/new" method="POST">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="role_slug">Slug</label>
+                <input type="text" id="role_slug" name="slug" required placeholder="senior-engineer" pattern="[a-z0-9-]+">
+                <small>Lowercase letters, numbers, and hyphens only</small>
+            </div>
+            <div class="form-group">
+                <label for="role_title">Title</label>
+                <input type="text" id="role_title" name="title" required placeholder="Senior Software Engineer">
+            </div>
+        </div>
+        <button type="submit">Add Role</button>
+    </form>
+</div>
+
+<h2>Meetings</h2>
+{{if .Meetings}}
+<div class="card">
+    <div class="timeline">
+        {{range .Meetings}}
+        <div class="timeline-item">
+            <div class="timeline-date">{{.OccurredAt.Format "Jan 02, 2006 3:04 PM"}}</div>
+            <strong>{{.Title}}</strong>
+            <br><span class="path-display">{{.PathMD}}</span>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{else}}
+<div class="card">
+    <p>No meetings yet. Add one below.</p>
+</div>
+{{end}}
+
+<div class="form-section">
+    <h3>Add Meeting</h3>
+    <form action="/companies/{{.Company.Slug}}/meetings/new" method="POST">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="meeting_title">Title</label>
+                <input type="text" id="meeting_title" name="title" required placeholder="Phone Screen">
+            </div>
+            <div class="form-group">
+                <label for="occurred_at">Date/Time</label>
+                <input type="datetime-local" id="occurred_at" name="occurred_at" required>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="thread_id">Thread (optional)</label>
+            {{if .Threads}}
+            <select id="thread_id" name="thread_id">
+                <option value="">-- No thread --</option>
+                {{range .Threads}}
+                <option value="{{.ID}}">{{.Title}}</option>
+                {{end}}
+            </select>
+            {{else}}
+            <select id="thread_id" name="thread_id" disabled>
+                <option value="">No threads available</option>
+            </select>
+            <small><a href="/threads">Create a thread first</a></small>
+            {{end}}
+        </div>
+        <button type="submit">Add Meeting</button>
+    </form>
+</div>
+{{end}}

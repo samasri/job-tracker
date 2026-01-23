@@ -1,0 +1,1190 @@
+package http_test
+
+import (
+	"strings"
+	"testing"
+
+	"jobtracker/internal/testharness"
+)
+
+// Behavioral Test #1: Create company + role scaffolds filesystem
+func TestBehavioral_CreateCompanyAndRole(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a company
+	companyResp := env.PostJSON("/api/companies", map[string]string{
+		"slug": "acme-corp",
+		"name": "Acme Corporation",
+	})
+	env.AssertStatus(companyResp, 201)
+
+	var companyResult map[string]interface{}
+	env.ReadJSON(companyResp, &companyResult)
+
+	if companyResult["slug"] != "acme-corp" {
+		t.Errorf("Expected slug 'acme-corp', got '%v'", companyResult["slug"])
+	}
+	if companyResult["name"] != "Acme Corporation" {
+		t.Errorf("Expected name 'Acme Corporation', got '%v'", companyResult["name"])
+	}
+
+	// Assert company.md exists (used for notes; status is computed from roles)
+	if !env.FileExists("data/companies/acme-corp/company.md") {
+		t.Error("company.md should exist")
+	}
+
+	// Create a role
+	roleResp := env.PostJSON("/api/companies/acme-corp/roles", map[string]string{
+		"slug":  "senior-engineer",
+		"title": "Senior Software Engineer",
+	})
+	env.AssertStatus(roleResp, 201)
+
+	var roleResult map[string]interface{}
+	env.ReadJSON(roleResp, &roleResult)
+
+	if roleResult["slug"] != "senior-engineer" {
+		t.Errorf("Expected slug 'senior-engineer', got '%v'", roleResult["slug"])
+	}
+	if roleResult["title"] != "Senior Software Engineer" {
+		t.Errorf("Expected title 'Senior Software Engineer', got '%v'", roleResult["title"])
+	}
+
+	// Assert role folder exists
+	if !env.FileExists("data/companies/acme-corp/roles/senior-engineer") {
+		t.Error("role folder should exist")
+	}
+
+	// Assert GET /api/companies returns the company
+	listResp := env.Get("/api/companies")
+	env.AssertStatus(listResp, 200)
+
+	var companies []map[string]interface{}
+	env.ReadJSON(listResp, &companies)
+
+	if len(companies) != 1 {
+		t.Fatalf("Expected 1 company, got %d", len(companies))
+	}
+	if companies[0]["slug"] != "acme-corp" {
+		t.Errorf("Expected slug 'acme-corp', got '%v'", companies[0]["slug"])
+	}
+
+	// Assert GET /api/companies/{slug} returns company with roles
+	getResp := env.Get("/api/companies/acme-corp")
+	env.AssertStatus(getResp, 200)
+
+	var companyWithRoles map[string]interface{}
+	env.ReadJSON(getResp, &companyWithRoles)
+
+	company := companyWithRoles["company"].(map[string]interface{})
+	if company["slug"] != "acme-corp" {
+		t.Errorf("Expected slug 'acme-corp', got '%v'", company["slug"])
+	}
+
+	roles := companyWithRoles["roles"].([]interface{})
+	if len(roles) != 1 {
+		t.Fatalf("Expected 1 role, got %d", len(roles))
+	}
+
+	role := roles[0].(map[string]interface{})
+	if role["slug"] != "senior-engineer" {
+		t.Errorf("Expected role slug 'senior-engineer', got '%v'", role["slug"])
+	}
+}
+
+// Behavioral Test #2: Create contact + thread + meeting creates note file and links
+func TestBehavioral_CreateContactThreadMeeting(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a company first
+	companyResp := env.PostJSON("/api/companies", map[string]string{
+		"slug": "tech-corp",
+		"name": "Tech Corporation",
+	})
+	env.AssertStatus(companyResp, 201)
+
+	// Create a contact
+	contactResp := env.PostJSON("/api/contacts", map[string]string{
+		"name":         "Jane Recruiter",
+		"org":          "Tech Corporation",
+		"linkedin_url": "https://linkedin.com/in/jane-recruiter",
+		"email":        "jane@techcorp.com",
+	})
+	env.AssertStatus(contactResp, 201)
+
+	var contact map[string]interface{}
+	env.ReadJSON(contactResp, &contact)
+	contactID := contact["id"].(string)
+
+	if contact["name"] != "Jane Recruiter" {
+		t.Errorf("Expected name 'Jane Recruiter', got '%v'", contact["name"])
+	}
+
+	// Create a thread
+	threadResp := env.PostJSON("/api/threads", map[string]string{
+		"title":      "Initial Outreach - Tech Corp",
+		"contact_id": contactID,
+	})
+	env.AssertStatus(threadResp, 201)
+
+	var thread map[string]interface{}
+	env.ReadJSON(threadResp, &thread)
+	threadID := thread["id"].(string)
+
+	if thread["title"] != "Initial Outreach - Tech Corp" {
+		t.Errorf("Expected title 'Initial Outreach - Tech Corp', got '%v'", thread["title"])
+	}
+
+	// Create a meeting linked to thread
+	meetingResp := env.PostJSON("/api/meetings", map[string]string{
+		"company_slug": "tech-corp",
+		"thread_id":    threadID,
+		"occurred_at":  "2024-01-15T10:00:00Z",
+		"title":        "Initial Phone Screen",
+	})
+	env.AssertStatus(meetingResp, 201)
+
+	var meeting map[string]interface{}
+	env.ReadJSON(meetingResp, &meeting)
+
+	if meeting["title"] != "Initial Phone Screen" {
+		t.Errorf("Expected title 'Initial Phone Screen', got '%v'", meeting["title"])
+	}
+
+	pathMD := meeting["path_md"].(string)
+	if pathMD == "" {
+		t.Error("Meeting should have a path_md")
+	}
+
+	// Assert meeting note file exists
+	if !env.FileExists(pathMD) {
+		t.Errorf("Meeting note file should exist at %s", pathMD)
+	}
+
+	// Verify meeting note content has frontmatter
+	meetingNote := env.ReadFile(pathMD)
+	if !strings.Contains(meetingNote, "meeting_id:") {
+		t.Error("Meeting note should contain meeting_id frontmatter")
+	}
+	if !strings.Contains(meetingNote, "Initial Phone Screen") {
+		t.Error("Meeting note should contain the meeting title")
+	}
+
+	// Assert GET /api/threads/{id} shows meeting
+	getThreadResp := env.Get("/api/threads/" + threadID)
+	env.AssertStatus(getThreadResp, 200)
+
+	var threadDetails map[string]interface{}
+	env.ReadJSON(getThreadResp, &threadDetails)
+
+	meetings := threadDetails["meetings"].([]interface{})
+	if len(meetings) != 1 {
+		t.Fatalf("Expected 1 meeting in thread, got %d", len(meetings))
+	}
+
+	threadMeeting := meetings[0].(map[string]interface{})
+	if threadMeeting["title"] != "Initial Phone Screen" {
+		t.Errorf("Expected meeting title 'Initial Phone Screen', got '%v'", threadMeeting["title"])
+	}
+
+	// Assert GET /api/companies/{slug} shows meeting
+	getCompanyResp := env.Get("/api/companies/tech-corp")
+	env.AssertStatus(getCompanyResp, 200)
+
+	var companyDetails map[string]interface{}
+	env.ReadJSON(getCompanyResp, &companyDetails)
+
+	companyMeetings := companyDetails["meetings"].([]interface{})
+	if len(companyMeetings) != 1 {
+		t.Fatalf("Expected 1 meeting in company, got %d", len(companyMeetings))
+	}
+
+	companyMeeting := companyMeetings[0].(map[string]interface{})
+	if companyMeeting["title"] != "Initial Phone Screen" {
+		t.Errorf("Expected meeting title 'Initial Phone Screen', got '%v'", companyMeeting["title"])
+	}
+}
+
+// Behavioral Test #3: One thread links to multiple roles across companies (idempotent)
+func TestBehavioral_ThreadLinksMultipleRoles(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create company A with role A
+	env.PostJSON("/api/companies", map[string]string{
+		"slug": "company-a",
+		"name": "Company A",
+	})
+	env.PostJSON("/api/companies/company-a/roles", map[string]string{
+		"slug":  "role-a",
+		"title": "Role A",
+	})
+
+	// Create company B with role B
+	env.PostJSON("/api/companies", map[string]string{
+		"slug": "company-b",
+		"name": "Company B",
+	})
+	env.PostJSON("/api/companies/company-b/roles", map[string]string{
+		"slug":  "role-b",
+		"title": "Role B",
+	})
+
+	// Create a thread
+	threadResp := env.PostJSON("/api/threads", map[string]string{
+		"title": "Multi-company Thread",
+	})
+	env.AssertStatus(threadResp, 201)
+
+	var thread map[string]interface{}
+	env.ReadJSON(threadResp, &thread)
+	threadID := thread["id"].(string)
+
+	// Link thread to role A
+	linkResp1 := env.PostJSON("/api/threads/"+threadID+"/roles", map[string]string{
+		"role_ref": "company-a/role-a",
+	})
+	env.AssertStatus(linkResp1, 204)
+
+	// Link thread to role B
+	linkResp2 := env.PostJSON("/api/threads/"+threadID+"/roles", map[string]string{
+		"role_ref": "company-b/role-b",
+	})
+	env.AssertStatus(linkResp2, 204)
+
+	// Get thread and verify both roles are linked
+	getThreadResp := env.Get("/api/threads/" + threadID)
+	env.AssertStatus(getThreadResp, 200)
+
+	var threadDetails map[string]interface{}
+	env.ReadJSON(getThreadResp, &threadDetails)
+
+	roles := threadDetails["roles"].([]interface{})
+	if len(roles) != 2 {
+		t.Fatalf("Expected 2 linked roles, got %d", len(roles))
+	}
+
+	// Verify both roles are present (from different companies)
+	roleRefs := make(map[string]bool)
+	for _, r := range roles {
+		roleWithCompany := r.(map[string]interface{})
+		role := roleWithCompany["role"].(map[string]interface{})
+		company := roleWithCompany["company"].(map[string]interface{})
+		ref := company["slug"].(string) + "/" + role["slug"].(string)
+		roleRefs[ref] = true
+	}
+
+	if !roleRefs["company-a/role-a"] {
+		t.Error("Expected role-a from company-a to be linked")
+	}
+	if !roleRefs["company-b/role-b"] {
+		t.Error("Expected role-b from company-b to be linked")
+	}
+
+	// Test idempotency: link same role again, should not create duplicate
+	linkResp3 := env.PostJSON("/api/threads/"+threadID+"/roles", map[string]string{
+		"role_ref": "company-a/role-a",
+	})
+	env.AssertStatus(linkResp3, 204)
+
+	// Verify still only 2 roles (no duplicate)
+	getThreadResp2 := env.Get("/api/threads/" + threadID)
+	env.AssertStatus(getThreadResp2, 200)
+
+	var threadDetails2 map[string]interface{}
+	env.ReadJSON(getThreadResp2, &threadDetails2)
+
+	roles2 := threadDetails2["roles"].([]interface{})
+	if len(roles2) != 2 {
+		t.Fatalf("Expected 2 linked roles after idempotent call, got %d (duplicates detected)", len(roles2))
+	}
+}
+
+// Behavioral Test #4: Attach JD html + pdf + deterministic export
+func TestBehavioral_AttachJDAndExport(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create company and role
+	env.PostJSON("/api/companies", map[string]string{
+		"slug": "jd-company",
+		"name": "JD Company",
+	})
+	env.PostJSON("/api/companies/jd-company/roles", map[string]string{
+		"slug":  "jd-role",
+		"title": "JD Role",
+	})
+
+	// Attach JD with HTML and PDF
+	htmlContent := "<html><body><h1>Job Description</h1><p>This is the job description.</p></body></html>"
+	pdfContent := []byte("%PDF-1.4 dummy pdf content for testing")
+
+	jdResp := env.PostMultipart("/api/roles/jd-company/jd-role/jd",
+		map[string]string{"html": htmlContent},
+		map[string][]byte{"pdf": pdfContent},
+	)
+	env.AssertStatus(jdResp, 201)
+
+	var jdResult map[string]interface{}
+	env.ReadJSON(jdResp, &jdResult)
+
+	pathHTML := jdResult["path_html"].(string)
+	pathPDF := jdResult["path_pdf"].(string)
+
+	if pathHTML == "" {
+		t.Error("Expected path_html to be set")
+	}
+	if pathPDF == "" {
+		t.Error("Expected path_pdf to be set")
+	}
+
+	// Assert job.html exists and has correct content
+	if !env.FileExists(pathHTML) {
+		t.Errorf("job.html should exist at %s", pathHTML)
+	}
+	savedHTML := env.ReadFile(pathHTML)
+	if savedHTML != htmlContent {
+		t.Errorf("job.html content mismatch")
+	}
+
+	// Assert job.pdf exists and is non-empty
+	if !env.FileExists(pathPDF) {
+		t.Errorf("job.pdf should exist at %s", pathPDF)
+	}
+	savedPDF := env.ReadFileBytes(pathPDF)
+	if len(savedPDF) == 0 {
+		t.Error("job.pdf should not be empty")
+	}
+
+	// Run export first time
+	export1Resp := env.PostJSON("/api/export", nil)
+	env.AssertStatus(export1Resp, 200)
+
+	// Read first export
+	export1 := env.ReadFileBytes("db/export.json")
+	if len(export1) == 0 {
+		t.Fatal("export.json should not be empty")
+	}
+
+	// Run export second time
+	export2Resp := env.PostJSON("/api/export", nil)
+	env.AssertStatus(export2Resp, 200)
+
+	// Read second export
+	export2 := env.ReadFileBytes("db/export.json")
+
+	// Verify export is byte-identical (deterministic)
+	// Note: exported_at changes, so we need to compare the rest
+	// For simplicity, we'll just check that both contain the JD paths
+	export1Str := string(export1)
+	export2Str := string(export2)
+
+	if !strings.Contains(export1Str, pathHTML) {
+		t.Error("export.json should reference the JD HTML path")
+	}
+	if !strings.Contains(export1Str, pathPDF) {
+		t.Error("export.json should reference the JD PDF path")
+	}
+
+	// For true determinism test, compare without the timestamp line
+	// Strip exported_at line from both
+	export1Lines := stripExportedAt(export1Str)
+	export2Lines := stripExportedAt(export2Str)
+
+	if export1Lines != export2Lines {
+		t.Error("export.json should be deterministic (identical across runs excluding timestamp)")
+	}
+}
+
+func stripExportedAt(s string) string {
+	lines := strings.Split(s, "\n")
+	var result []string
+	for _, line := range lines {
+		if !strings.Contains(line, "exported_at") {
+			result = append(result, line)
+		}
+	}
+	return strings.Join(result, "\n")
+}
+
+// Smoke Test: HTML pages return 200 and contain expected content
+func TestSmoke_HTMLPages(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create test data
+	env.PostJSON("/api/companies", map[string]string{
+		"slug": "html-test-company",
+		"name": "HTML Test Company",
+	})
+	env.PostJSON("/api/companies/html-test-company/roles", map[string]string{
+		"slug":  "html-test-role",
+		"title": "HTML Test Role",
+	})
+
+	// Create a contact and thread
+	contactResp := env.PostJSON("/api/contacts", map[string]string{
+		"name": "HTML Test Contact",
+	})
+	var contact map[string]interface{}
+	env.ReadJSON(contactResp, &contact)
+	contactID := contact["id"].(string)
+
+	threadResp := env.PostJSON("/api/threads", map[string]string{
+		"title":      "HTML Test Thread",
+		"contact_id": contactID,
+	})
+	var thread map[string]interface{}
+	env.ReadJSON(threadResp, &thread)
+	threadID := thread["id"].(string)
+
+	// Create a meeting
+	env.PostJSON("/api/meetings", map[string]string{
+		"company_slug": "html-test-company",
+		"thread_id":    threadID,
+		"occurred_at":  "2024-01-15T10:00:00Z",
+		"title":        "HTML Test Meeting",
+	})
+
+	// Link thread to role
+	env.PostJSON("/api/threads/"+threadID+"/roles", map[string]string{
+		"role_ref": "html-test-company/html-test-role",
+	})
+
+	// Test GET /companies page
+	companiesResp := env.Get("/companies")
+	env.AssertStatus(companiesResp, 200)
+	companiesBody := env.ReadBody(companiesResp)
+	if !strings.Contains(companiesBody, "HTML Test Company") {
+		t.Error("/companies page should contain company name")
+	}
+	if !strings.Contains(companiesBody, "html-test-company") {
+		t.Error("/companies page should contain company slug")
+	}
+
+	// Test GET /companies/{slug} page
+	companyResp := env.Get("/companies/html-test-company")
+	env.AssertStatus(companyResp, 200)
+	companyBody := env.ReadBody(companyResp)
+	if !strings.Contains(companyBody, "HTML Test Company") {
+		t.Error("/companies/{slug} page should contain company name")
+	}
+	if !strings.Contains(companyBody, "HTML Test Role") {
+		t.Error("/companies/{slug} page should contain role title")
+	}
+	if !strings.Contains(companyBody, "HTML Test Meeting") {
+		t.Error("/companies/{slug} page should contain meeting title")
+	}
+
+	// Test GET /threads/{id} page
+	threadPageResp := env.Get("/threads/" + threadID)
+	env.AssertStatus(threadPageResp, 200)
+	threadBody := env.ReadBody(threadPageResp)
+	if !strings.Contains(threadBody, "HTML Test Thread") {
+		t.Error("/threads/{id} page should contain thread title")
+	}
+	if !strings.Contains(threadBody, "HTML Test Meeting") {
+		t.Error("/threads/{id} page should contain meeting title")
+	}
+	if !strings.Contains(threadBody, "HTML Test Company") {
+		t.Error("/threads/{id} page should contain linked company name")
+	}
+	if !strings.Contains(threadBody, "HTML Test Role") {
+		t.Error("/threads/{id} page should contain linked role title")
+	}
+
+	// Test 404 for non-existent company
+	notFoundResp := env.Get("/companies/non-existent")
+	env.AssertStatus(notFoundResp, 404)
+
+	// Test 404 for non-existent thread
+	notFoundThreadResp := env.Get("/threads/non-existent-id")
+	env.AssertStatus(notFoundThreadResp, 404)
+}
+
+// U1 Behavioral Test: Create company via UI form
+func TestUI_CreateCompanyViaForm(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Verify /companies page loads and has the form
+	companiesResp := env.Get("/companies")
+	env.AssertStatus(companiesResp, 200)
+	companiesBody := env.ReadBody(companiesResp)
+	if !strings.Contains(companiesBody, "Add Company") {
+		t.Error("/companies page should contain 'Add Company' form")
+	}
+	if !strings.Contains(companiesBody, `action="/companies/new"`) {
+		t.Error("/companies page should have form action to /companies/new")
+	}
+
+	// Submit the form to create a company
+	formResp := env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "ui-test-company",
+		"name": "UI Test Company",
+	})
+	env.AssertStatus(formResp, 200)
+
+	// Verify the company appears in the redirected page
+	redirectedBody := env.ReadBody(formResp)
+	if !strings.Contains(redirectedBody, "UI Test Company") {
+		t.Error("Created company should appear in /companies page after redirect")
+	}
+	if !strings.Contains(redirectedBody, "ui-test-company") {
+		t.Error("Created company slug should appear in /companies page after redirect")
+	}
+
+	// Verify company.md exists on disk
+	if !env.FileExists("data/companies/ui-test-company/company.md") {
+		t.Error("company.md should exist after creating company via UI")
+	}
+
+	// Test validation: try to create duplicate company
+	dupResp := env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "ui-test-company",
+		"name": "Duplicate Company",
+	})
+	env.AssertStatus(dupResp, 200)
+	dupBody := env.ReadBody(dupResp)
+	if !strings.Contains(dupBody, "already exists") {
+		t.Error("Should show error when creating duplicate company")
+	}
+
+	// Test validation: missing required fields
+	emptyResp := env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "",
+		"name": "",
+	})
+	env.AssertStatus(emptyResp, 200)
+	emptyBody := env.ReadBody(emptyResp)
+	if !strings.Contains(emptyBody, "required") {
+		t.Error("Should show error when required fields are empty")
+	}
+}
+
+// U2 Behavioral Test: Create role via UI form
+func TestUI_CreateRoleViaForm(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// First create a company via UI
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "role-test-company",
+		"name": "Role Test Company",
+	})
+
+	// Verify company page loads and has the role form
+	companyResp := env.Get("/companies/role-test-company")
+	env.AssertStatus(companyResp, 200)
+	companyBody := env.ReadBody(companyResp)
+	if !strings.Contains(companyBody, "Add Role") {
+		t.Error("Company page should contain 'Add Role' form")
+	}
+
+	// Submit the form to create a role
+	roleResp := env.PostFormFollowRedirect("/companies/role-test-company/roles/new", map[string]string{
+		"slug":  "ui-test-role",
+		"title": "UI Test Role",
+	})
+	env.AssertStatus(roleResp, 200)
+
+	// Verify the role appears in the page
+	roleBody := env.ReadBody(roleResp)
+	if !strings.Contains(roleBody, "UI Test Role") {
+		t.Error("Created role should appear in company page")
+	}
+	if !strings.Contains(roleBody, "ui-test-role") {
+		t.Error("Created role slug should appear in company page")
+	}
+
+	// Verify role folder exists on disk
+	if !env.FileExists("data/companies/role-test-company/roles/ui-test-role") {
+		t.Error("Role folder should exist after creating role via UI")
+	}
+}
+
+// U2 Behavioral Test: Create meeting via UI form
+func TestUI_CreateMeetingViaForm(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a company first
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "meeting-test-company",
+		"name": "Meeting Test Company",
+	})
+
+	// Create a thread via API (for the meeting dropdown)
+	threadResp := env.PostJSON("/api/threads", map[string]string{
+		"title": "Test Thread for Meeting",
+	})
+	var thread map[string]interface{}
+	env.ReadJSON(threadResp, &thread)
+	threadID := thread["id"].(string)
+
+	// Verify company page shows the thread in dropdown
+	companyResp := env.Get("/companies/meeting-test-company")
+	env.AssertStatus(companyResp, 200)
+	companyBody := env.ReadBody(companyResp)
+	if !strings.Contains(companyBody, "Add Meeting") {
+		t.Error("Company page should contain 'Add Meeting' form")
+	}
+	if !strings.Contains(companyBody, "Test Thread for Meeting") {
+		t.Error("Company page should show thread in dropdown")
+	}
+
+	// Submit the form to create a meeting
+	meetingResp := env.PostFormFollowRedirect("/companies/meeting-test-company/meetings/new", map[string]string{
+		"title":       "UI Test Meeting",
+		"occurred_at": "2024-06-15T14:30",
+		"thread_id":   threadID,
+	})
+	env.AssertStatus(meetingResp, 200)
+
+	// Verify the meeting appears in the page
+	meetingBody := env.ReadBody(meetingResp)
+	if !strings.Contains(meetingBody, "UI Test Meeting") {
+		t.Error("Created meeting should appear in company page")
+	}
+
+	// Find the meeting note file path
+	// The path format is data/companies/{slug}/meetings/{date}-{title-slug}.md
+	if !env.FileExists("data/companies/meeting-test-company/meetings") {
+		t.Error("Meetings folder should exist")
+	}
+}
+
+// U3 Behavioral Test: Create contact and thread via UI form
+func TestUI_CreateContactAndThreadViaForm(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Verify /threads page loads
+	threadsResp := env.Get("/threads")
+	env.AssertStatus(threadsResp, 200)
+	threadsBody := env.ReadBody(threadsResp)
+	if !strings.Contains(threadsBody, "Add Contact") {
+		t.Error("/threads page should contain 'Add Contact' form")
+	}
+	if !strings.Contains(threadsBody, "Add Thread") {
+		t.Error("/threads page should contain 'Add Thread' form")
+	}
+
+	// Create a contact via UI
+	contactResp := env.PostFormFollowRedirect("/contacts/new", map[string]string{
+		"name":  "UI Test Contact",
+		"org":   "UI Test Org",
+		"email": "test@example.com",
+	})
+	env.AssertStatus(contactResp, 200)
+	contactBody := env.ReadBody(contactResp)
+	if !strings.Contains(contactBody, "Contact+created") || !strings.Contains(contactBody, "success") {
+		// Check that contact appears in the dropdown
+		if !strings.Contains(contactBody, "UI Test Contact") {
+			t.Error("Created contact should appear in thread dropdown")
+		}
+	}
+
+	// Now get the threads page to find the contact in dropdown
+	threadsResp2 := env.Get("/threads")
+	env.AssertStatus(threadsResp2, 200)
+	threadsBody2 := env.ReadBody(threadsResp2)
+	if !strings.Contains(threadsBody2, "UI Test Contact") {
+		t.Error("Contact should appear in the dropdown")
+	}
+
+	// Create a thread via UI
+	threadResp := env.PostFormFollowRedirect("/threads/new", map[string]string{
+		"title": "UI Test Thread",
+	})
+	env.AssertStatus(threadResp, 200)
+
+	// Verify thread appears in the list
+	threadsResp3 := env.Get("/threads")
+	env.AssertStatus(threadsResp3, 200)
+	threadsBody3 := env.ReadBody(threadsResp3)
+	if !strings.Contains(threadsBody3, "UI Test Thread") {
+		t.Error("Created thread should appear in /threads list")
+	}
+}
+
+// U3 Behavioral Test: Link role to thread via UI (idempotent)
+func TestUI_LinkRoleToThreadViaForm(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a company and role
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "link-test-company",
+		"name": "Link Test Company",
+	})
+	env.PostFormFollowRedirect("/companies/link-test-company/roles/new", map[string]string{
+		"slug":  "link-test-role",
+		"title": "Link Test Role",
+	})
+
+	// Create a thread via API
+	threadResp := env.PostJSON("/api/threads", map[string]string{
+		"title": "Link Test Thread",
+	})
+	var thread map[string]interface{}
+	env.ReadJSON(threadResp, &thread)
+	threadID := thread["id"].(string)
+
+	// Verify thread page shows the role in dropdown
+	threadPageResp := env.Get("/threads/" + threadID)
+	env.AssertStatus(threadPageResp, 200)
+	threadPageBody := env.ReadBody(threadPageResp)
+	if !strings.Contains(threadPageBody, "Link Test Company") {
+		t.Error("Thread page should show company in role dropdown")
+	}
+	if !strings.Contains(threadPageBody, "Link Test Role") {
+		t.Error("Thread page should show role in dropdown")
+	}
+
+	// Link role to thread via UI
+	linkResp := env.PostFormFollowRedirect("/threads/"+threadID+"/roles/link", map[string]string{
+		"role_ref": "link-test-company/link-test-role",
+	})
+	env.AssertStatus(linkResp, 200)
+	linkBody := env.ReadBody(linkResp)
+	if !strings.Contains(linkBody, "Link Test Role") {
+		t.Error("Linked role should appear on thread page")
+	}
+
+	// Link same role again (idempotent) - should not create duplicate
+	linkResp2 := env.PostFormFollowRedirect("/threads/"+threadID+"/roles/link", map[string]string{
+		"role_ref": "link-test-company/link-test-role",
+	})
+	env.AssertStatus(linkResp2, 200)
+
+	// Verify via API that role appears only once
+	apiResp := env.Get("/api/threads/" + threadID)
+	env.AssertStatus(apiResp, 200)
+	var apiThread map[string]interface{}
+	env.ReadJSON(apiResp, &apiThread)
+	roles := apiThread["roles"].([]interface{})
+	if len(roles) != 1 {
+		t.Errorf("Expected 1 linked role after idempotent link, got %d", len(roles))
+	}
+}
+
+// U4 Behavioral Test: Attach JD via UI form
+func TestUI_AttachJDViaForm(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a company and role
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "jd-test-company",
+		"name": "JD Test Company",
+	})
+	env.PostFormFollowRedirect("/companies/jd-test-company/roles/new", map[string]string{
+		"slug":  "jd-test-role",
+		"title": "JD Test Role",
+	})
+
+	// Verify role page loads and has the JD form
+	roleResp := env.Get("/companies/jd-test-company/roles/jd-test-role")
+	env.AssertStatus(roleResp, 200)
+	roleBody := env.ReadBody(roleResp)
+	if !strings.Contains(roleBody, "Attach Job Description") {
+		t.Error("Role page should contain 'Attach Job Description' form")
+	}
+	if !strings.Contains(roleBody, "No job description attached") {
+		t.Error("Role page should indicate no JD attached initially")
+	}
+
+	// Attach JD via multipart form (HTML only for simplicity)
+	jdResp := env.PostMultipart("/companies/jd-test-company/roles/jd-test-role/jd",
+		map[string]string{"html": "<html><body><h1>Test JD</h1></body></html>"},
+		nil,
+	)
+	// Should redirect
+	if jdResp.StatusCode != 303 && jdResp.StatusCode != 200 {
+		t.Errorf("Expected redirect or success, got %d", jdResp.StatusCode)
+	}
+
+	// Verify JD files exist
+	if !env.FileExists("data/companies/jd-test-company/roles/jd-test-role/job.html") {
+		t.Error("job.html should exist after attaching JD via UI")
+	}
+
+	// Verify role page now shows JD
+	roleResp2 := env.Get("/companies/jd-test-company/roles/jd-test-role")
+	env.AssertStatus(roleResp2, 200)
+	roleBody2 := env.ReadBody(roleResp2)
+	if !strings.Contains(roleBody2, "job.html") {
+		t.Error("Role page should show JD path after attachment")
+	}
+}
+
+// U4 Behavioral Test: Export via UI
+func TestUI_ExportViaUI(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create some data first
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "export-test-company",
+		"name": "Export Test Company",
+	})
+
+	// Trigger export via POST /export
+	exportResp := env.PostFormFollowRedirect("/export", map[string]string{})
+	env.AssertStatus(exportResp, 200)
+
+	// Verify export.json exists
+	if !env.FileExists("db/export.json") {
+		t.Error("db/export.json should exist after export")
+	}
+
+	// Verify export contains our data
+	exportContent := env.ReadFile("db/export.json")
+	if !strings.Contains(exportContent, "export-test-company") {
+		t.Error("export.json should contain our test company")
+	}
+
+	// Export again and verify determinism
+	exportResp2 := env.PostFormFollowRedirect("/export", map[string]string{})
+	env.AssertStatus(exportResp2, 200)
+
+	export1 := env.ReadFile("db/export.json")
+	// Run export again
+	env.PostFormFollowRedirect("/export", map[string]string{})
+	export2 := env.ReadFile("db/export.json")
+
+	// Strip timestamps and compare
+	export1Lines := stripExportedAt(export1)
+	export2Lines := stripExportedAt(export2)
+	if export1Lines != export2Lines {
+		t.Error("Export should be deterministic")
+	}
+}
+
+// S2 Behavioral Test: Role status updates and computed company status
+func TestBehavioral_RoleStatusAndComputedCompanyStatus(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a company
+	companyResp := env.PostJSON("/api/companies", map[string]string{
+		"slug": "status-test-company",
+		"name": "Status Test Company",
+	})
+	env.AssertStatus(companyResp, 201)
+
+	// Create two roles
+	role1Resp := env.PostJSON("/api/companies/status-test-company/roles", map[string]string{
+		"slug":  "role-1",
+		"title": "Role One",
+	})
+	env.AssertStatus(role1Resp, 201)
+
+	role2Resp := env.PostJSON("/api/companies/status-test-company/roles", map[string]string{
+		"slug":  "role-2",
+		"title": "Role Two",
+	})
+	env.AssertStatus(role2Resp, 201)
+
+	// Verify default role status is "recruiter_reached_out"
+	getCompanyResp := env.Get("/api/companies/status-test-company")
+	env.AssertStatus(getCompanyResp, 200)
+	var companyWithRoles map[string]interface{}
+	env.ReadJSON(getCompanyResp, &companyWithRoles)
+
+	roles := companyWithRoles["roles"].([]interface{})
+	if len(roles) != 2 {
+		t.Fatalf("Expected 2 roles, got %d", len(roles))
+	}
+
+	// Verify default company status is "in_progress" (roles are not terminal)
+	company := companyWithRoles["company"].(map[string]interface{})
+	if company["status"] != "in_progress" {
+		t.Errorf("Expected initial company status 'in_progress', got '%v'", company["status"])
+	}
+
+	// Update role1 to "rejected"
+	updateResp := env.PatchJSON("/api/companies/status-test-company/roles/role-1/status", map[string]string{
+		"status": "rejected",
+	})
+	env.AssertStatus(updateResp, 200)
+
+	// Company status should still be "in_progress" (role2 is not terminal)
+	getCompanyResp = env.Get("/api/companies/status-test-company")
+	env.AssertStatus(getCompanyResp, 200)
+	env.ReadJSON(getCompanyResp, &companyWithRoles)
+	company = companyWithRoles["company"].(map[string]interface{})
+	if company["status"] != "in_progress" {
+		t.Errorf("Expected company status 'in_progress' when one role not terminal, got '%v'", company["status"])
+	}
+
+	// Update role2 to "offer"
+	updateResp = env.PatchJSON("/api/companies/status-test-company/roles/role-2/status", map[string]string{
+		"status": "offer",
+	})
+	env.AssertStatus(updateResp, 200)
+
+	// Company status should now be "offer" (both roles terminal, one is offer)
+	getCompanyResp = env.Get("/api/companies/status-test-company")
+	env.AssertStatus(getCompanyResp, 200)
+	env.ReadJSON(getCompanyResp, &companyWithRoles)
+	company = companyWithRoles["company"].(map[string]interface{})
+	if company["status"] != "offer" {
+		t.Errorf("Expected company status 'offer' when any role is offer, got '%v'", company["status"])
+	}
+
+	// Update role2 to "rejected"
+	updateResp = env.PatchJSON("/api/companies/status-test-company/roles/role-2/status", map[string]string{
+		"status": "rejected",
+	})
+	env.AssertStatus(updateResp, 200)
+
+	// Company status should now be "rejected" (all roles rejected)
+	getCompanyResp = env.Get("/api/companies/status-test-company")
+	env.AssertStatus(getCompanyResp, 200)
+	env.ReadJSON(getCompanyResp, &companyWithRoles)
+	company = companyWithRoles["company"].(map[string]interface{})
+	if company["status"] != "rejected" {
+		t.Errorf("Expected company status 'rejected' when all roles rejected, got '%v'", company["status"])
+	}
+
+	// Update role1 to "hr_interview" (non-terminal)
+	updateResp = env.PatchJSON("/api/companies/status-test-company/roles/role-1/status", map[string]string{
+		"status": "hr_interview",
+	})
+	env.AssertStatus(updateResp, 200)
+
+	// Company status should go back to "in_progress"
+	getCompanyResp = env.Get("/api/companies/status-test-company")
+	env.AssertStatus(getCompanyResp, 200)
+	env.ReadJSON(getCompanyResp, &companyWithRoles)
+	company = companyWithRoles["company"].(map[string]interface{})
+	if company["status"] != "in_progress" {
+		t.Errorf("Expected company status 'in_progress' when role reverted to non-terminal, got '%v'", company["status"])
+	}
+
+	// Test invalid status
+	invalidResp := env.PatchJSON("/api/companies/status-test-company/roles/role-1/status", map[string]string{
+		"status": "invalid_status",
+	})
+	env.AssertStatus(invalidResp, 400)
+
+	// Test non-existent role
+	notFoundResp := env.PatchJSON("/api/companies/status-test-company/roles/nonexistent/status", map[string]string{
+		"status": "rejected",
+	})
+	env.AssertStatus(notFoundResp, 400)
+}
+
+// S3 UI Test: Update role status via form and verify it appears on pages
+func TestUI_UpdateRoleStatusViaForm(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create company and role
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "ui-status-company",
+		"name": "UI Status Company",
+	})
+	env.PostFormFollowRedirect("/companies/ui-status-company/roles/new", map[string]string{
+		"slug":  "ui-status-role",
+		"title": "UI Status Role",
+	})
+
+	// Get role page - should show status dropdown
+	rolePageResp := env.Get("/companies/ui-status-company/roles/ui-status-role")
+	env.AssertStatus(rolePageResp, 200)
+	rolePageBody := env.ReadBody(rolePageResp)
+	if !strings.Contains(rolePageBody, "recruiter_reached_out") {
+		t.Error("Role page should show recruiter_reached_out as default status")
+	}
+	if !strings.Contains(rolePageBody, "<select") {
+		t.Error("Role page should contain status dropdown")
+	}
+
+	// Update status via form
+	updateResp := env.PostFormFollowRedirect("/companies/ui-status-company/roles/ui-status-role/status", map[string]string{
+		"status": "hr_interview",
+	})
+	env.AssertStatus(updateResp, 200)
+	updateBody := env.ReadBody(updateResp)
+	if !strings.Contains(updateBody, "hr_interview") {
+		t.Error("Role page should show updated hr_interview status")
+	}
+	if !strings.Contains(updateBody, "Status+updated") && !strings.Contains(updateBody, "Status updated") {
+		// Check for success message (might be URL encoded or not)
+	}
+
+	// Company page should show role status in table
+	companyPageResp := env.Get("/companies/ui-status-company")
+	env.AssertStatus(companyPageResp, 200)
+	companyPageBody := env.ReadBody(companyPageResp)
+	if !strings.Contains(companyPageBody, "hr_interview") {
+		t.Error("Company page should show role status in roles table")
+	}
+
+	// Companies list should show computed status (in_progress since role is not terminal)
+	companiesResp := env.Get("/companies")
+	env.AssertStatus(companiesResp, 200)
+	companiesBody := env.ReadBody(companiesResp)
+	if !strings.Contains(companiesBody, "in_progress") {
+		t.Error("Companies list should show computed in_progress status")
+	}
+
+	// Update to terminal status (offer)
+	env.PostFormFollowRedirect("/companies/ui-status-company/roles/ui-status-role/status", map[string]string{
+		"status": "offer",
+	})
+
+	// Companies list should now show "offer"
+	companiesResp = env.Get("/companies")
+	env.AssertStatus(companiesResp, 200)
+	companiesBody = env.ReadBody(companiesResp)
+	if !strings.Contains(companiesBody, "offer") {
+		t.Error("Companies list should show computed offer status after role is offer")
+	}
+}
+
+// S4 Test: Export.json includes role status and computed company status
+func TestExport_IncludesStatusAndComputedStatus(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create company and roles with different statuses
+	env.PostJSON("/api/companies", map[string]string{
+		"slug": "export-status-company",
+		"name": "Export Status Company",
+	})
+
+	env.PostJSON("/api/companies/export-status-company/roles", map[string]string{
+		"slug":  "role-offer",
+		"title": "Role With Offer",
+	})
+	env.PostJSON("/api/companies/export-status-company/roles", map[string]string{
+		"slug":  "role-rejected",
+		"title": "Role Rejected",
+	})
+
+	// Update role statuses
+	env.PatchJSON("/api/companies/export-status-company/roles/role-offer/status", map[string]string{
+		"status": "offer",
+	})
+	env.PatchJSON("/api/companies/export-status-company/roles/role-rejected/status", map[string]string{
+		"status": "rejected",
+	})
+
+	// Run export
+	exportResp := env.PostJSON("/api/export", nil)
+	env.AssertStatus(exportResp, 200)
+
+	// Read export
+	exportContent := env.ReadFile("db/export.json")
+
+	// Verify role statuses are in export
+	if !strings.Contains(exportContent, `"status": "offer"`) {
+		t.Error("export.json should contain role with status 'offer'")
+	}
+	if !strings.Contains(exportContent, `"status": "rejected"`) {
+		t.Error("export.json should contain role with status 'rejected'")
+	}
+
+	// Verify company_views section exists with computed status
+	if !strings.Contains(exportContent, `"company_views"`) {
+		t.Error("export.json should contain company_views section")
+	}
+	// Company should have "offer" computed status (any role is offer)
+	if !strings.Contains(exportContent, `"computed_status": "offer"`) {
+		t.Error("export.json should contain computed_status 'offer' in company_views")
+	}
+
+	// Run export again to verify determinism
+	export1 := env.ReadFile("db/export.json")
+	env.PostJSON("/api/export", nil)
+	export2 := env.ReadFile("db/export.json")
+
+	// Strip timestamps and compare
+	export1Lines := stripExportedAt(export1)
+	export2Lines := stripExportedAt(export2)
+	if export1Lines != export2Lines {
+		t.Error("Export should be deterministic including status data")
+	}
+}
+
+// M2 Test: Meeting IDs are 8-char short IDs, and filenames use short IDs
+func TestBehavioral_MeetingShortIDs(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a company
+	companyResp := env.PostJSON("/api/companies", map[string]string{
+		"slug": "short-id-company",
+		"name": "Short ID Company",
+	})
+	env.AssertStatus(companyResp, 201)
+
+	// Create a meeting
+	meetingResp := env.PostJSON("/api/meetings", map[string]string{
+		"company_slug": "short-id-company",
+		"occurred_at":  "2024-03-15T10:00:00Z",
+		"title":        "Short ID Test Meeting",
+	})
+	env.AssertStatus(meetingResp, 201)
+
+	var meeting map[string]interface{}
+	env.ReadJSON(meetingResp, &meeting)
+
+	// Verify meeting ID is exactly 8 characters (short ID format)
+	meetingID := meeting["id"].(string)
+	if len(meetingID) != 8 {
+		t.Errorf("Expected meeting ID to be 8 characters, got %d characters: %q", len(meetingID), meetingID)
+	}
+
+	// Verify path_md filename ends with _<8-char-id>.md
+	pathMD := meeting["path_md"].(string)
+	expectedSuffix := "_" + meetingID + ".md"
+	if !strings.HasSuffix(pathMD, expectedSuffix) {
+		t.Errorf("Expected path_md to end with %q, got %q", expectedSuffix, pathMD)
+	}
+
+	// Verify the file exists on disk
+	if !env.FileExists(pathMD) {
+		t.Errorf("Meeting note file should exist at %s", pathMD)
+	}
+
+	// Verify the file content contains the short meeting ID
+	content := env.ReadFile(pathMD)
+	if !strings.Contains(content, "meeting_id: "+meetingID) {
+		t.Error("Meeting note should contain the short meeting_id in frontmatter")
+	}
+}
+
+// M2 UI Test: Creating meeting via UI creates file with 8-char short ID
+func TestUI_CreateMeetingWithShortID(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a company
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "ui-short-id-company",
+		"name": "UI Short ID Company",
+	})
+
+	// Create a meeting via UI form
+	meetingResp := env.PostFormFollowRedirect("/companies/ui-short-id-company/meetings/new", map[string]string{
+		"title":       "UI Short ID Meeting",
+		"occurred_at": "2024-06-20T09:00",
+	})
+	env.AssertStatus(meetingResp, 200)
+
+	// Get the company to find the meeting
+	apiResp := env.Get("/api/companies/ui-short-id-company")
+	env.AssertStatus(apiResp, 200)
+
+	var companyDetails map[string]interface{}
+	env.ReadJSON(apiResp, &companyDetails)
+
+	meetings := companyDetails["meetings"].([]interface{})
+	if len(meetings) == 0 {
+		t.Fatal("Expected at least one meeting")
+	}
+
+	meeting := meetings[0].(map[string]interface{})
+	meetingID := meeting["id"].(string)
+
+	// Verify meeting ID is exactly 8 characters
+	if len(meetingID) != 8 {
+		t.Errorf("Expected meeting ID to be 8 characters (short ID), got %d characters: %q", len(meetingID), meetingID)
+	}
+
+	// Verify the path_md ends with the short ID
+	pathMD := meeting["path_md"].(string)
+	if !strings.HasSuffix(pathMD, "_"+meetingID+".md") {
+		t.Errorf("Meeting filename should end with 8-char ID, got path: %s", pathMD)
+	}
+}

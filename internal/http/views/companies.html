@@ -1,0 +1,61 @@
+{{define "content"}}
+<h1>Companies</h1>
+
+{{if .Companies}}
+<table>
+    <thead>
+        <tr>
+            <th>Company</th>
+            <th>Status</th>
+            <th>Last Touch</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Companies}}
+        <tr>
+            <td>
+                <a href="/companies/{{.Company.Slug}}">{{.Company.Name}}</a>
+                <br><small style="color:#666">{{.Company.Slug}}</small>
+            </td>
+            <td>
+                {{if .Status}}
+                <span class="status status-{{.Status | statusClass}}">{{.Status}}</span>
+                {{else}}
+                <span class="status status-default">-</span>
+                {{end}}
+            </td>
+            <td class="last-touch">
+                {{if .LastTouch}}
+                {{.LastTouch}}
+                {{else}}
+                -
+                {{end}}
+            </td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{else}}
+<div class="card">
+    <p>No companies yet. Add one below.</p>
+</div>
+{{end}}
+
+<div class="form-section">
+    <h3>Add Company</h3>
+    <form action="/companies/new" method="POST">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="slug">Slug</label>
+                <input type="text" id="slug" name="slug" required placeholder="acme-corp" pattern="[a-z0-9-]+" value="{{.FormSlug}}">
+                <small>Lowercase letters, numbers, and hyphens only</small>
+            </div>
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" required placeholder="Acme Corporation" value="{{.FormName}}">
+            </div>
+        </div>
+        <button type="submit">Add Company</button>
+    </form>
+</div>
+{{end}}

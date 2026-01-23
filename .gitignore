@@ -1,0 +1,28 @@
+# SQLite database (not committed; use db/export.json for backup)
+db/index.sqlite
+db/index.sqlite-journal
+db/index.sqlite-wal
+db/index.sqlite-shm
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.log
