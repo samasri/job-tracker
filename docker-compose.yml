@@ -1,0 +1,8 @@
+services:
+  jobtracker:
+    build: .
+    ports:
+      - "2350:8080"
+    volumes:
+      - ./data:/app/data
+      - ./db:/app/db
