@@ -56,7 +56,48 @@
     </form>
 </div>
 
-<h2>Meetings Timeline</h2>
+<h2>Thread Meetings</h2>
+<p><small>Direct meetings associated with this thread (not tied to a specific role)</small></p>
+{{if .ThreadMeetings}}
+<div class="card">
+    <div class="timeline">
+        {{range .ThreadMeetings}}
+        <div class="timeline-item">
+            <div class="timeline-date">{{.OccurredAt.Format "Jan 02, 2006 3:04 PM"}}</div>
+            <strong>{{.Title}}</strong>
+            <br><span class="path-display">{{.PathMD}}</span>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{else}}
+<div class="card">
+    <p>No thread meetings yet. Add one below.</p>
+</div>
+{{end}}
+
+<div class="form-section">
+    <h3>Add Thread Meeting</h3>
+    <form action="/threads/{{.Thread.ID}}/meetings/v2/new" method="POST">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="thread_meeting_title">Title</label>
+                <input type="text" id="thread_meeting_title" name="title" required placeholder="Networking Call">
+            </div>
+            <div class="form-group">
+                <label for="thread_occurred_at">Date/Time</label>
+                <input type="datetime-local" id="thread_occurred_at" name="occurred_at" required>
+            </div>
+        </div>
+        <button type="submit">Add Thread Meeting</button>
+    </form>
+</div>
+
+<h2>Role Meetings (from Linked Roles)</h2>
+<p><small>Meetings associated with roles that are linked to this thread</small></p>
+{{if .RoleMeetingsGroups}}
+{{range .RoleMeetingsGroups}}
+<h3><a href="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}">{{.Company.Name}} — {{.Role.Title}}</a></h3>
 {{if .Meetings}}
 <div class="card">
     <div class="timeline">
@@ -71,40 +112,13 @@
 </div>
 {{else}}
 <div class="card">
-    <p>No meetings yet. Add one below.</p>
+    <p>No meetings yet for this role. <a href="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}">Add one on the role page</a>.</p>
 </div>
 {{end}}
-
-<div class="form-section">
-    <h3>Add Meeting</h3>
-    <form action="/threads/{{.Thread.ID}}/meetings/new" method="POST">
-        <div class="form-row">
-            <div class="form-group">
-                <label for="meeting_title">Title</label>
-                <input type="text" id="meeting_title" name="title" required placeholder="Phone Screen">
-            </div>
-            <div class="form-group">
-                <label for="occurred_at">Date/Time</label>
-                <input type="datetime-local" id="occurred_at" name="occurred_at" required>
-            </div>
-        </div>
-        <div class="form-group">
-            <label for="company_slug">Company</label>
-            {{if .Companies}}
-            <select id="company_slug" name="company_slug" required>
-                <option value="">-- Select a company --</option>
-                {{range .Companies}}
-                <option value="{{.Slug}}">{{.Name}}</option>
-                {{end}}
-            </select>
-            {{else}}
-            <select id="company_slug" name="company_slug" disabled>
-                <option value="">No companies available</option>
-            </select>
-            <small><a href="/companies">Create a company first</a></small>
-            {{end}}
-        </div>
-        <button type="submit">Add Meeting</button>
-    </form>
+{{end}}
+{{else}}
+<div class="card">
+    <p>No linked roles yet. Link a role above to see their meetings here.</p>
 </div>
+{{end}}
 {{end}}

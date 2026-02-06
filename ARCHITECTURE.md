@@ -256,20 +256,15 @@ erDiagram
         DATETIME updated_at
     }
 
-    meetings {
+    meetings_v2 {
         TEXT id PK
         TEXT occurred_at
         TEXT title
-        TEXT company_id FK
+        TEXT role_id FK "XOR with thread_id"
+        TEXT thread_id FK "XOR with role_id"
         TEXT path_md
         DATETIME created_at
         DATETIME updated_at
-    }
-
-    meeting_threads {
-        TEXT meeting_id PK,FK
-        TEXT thread_id PK,FK
-        DATETIME created_at
     }
 
     thread_roles {
@@ -281,8 +276,8 @@ erDiagram
     companies ||--o{ roles : "has"
     roles ||--o| role_job_descriptions : "has"
     contacts ||--o{ threads : "owns"
-    companies ||--o{ meetings : "hosts"
-    meetings }o--o{ threads : "linked via meeting_threads"
+    roles ||--o{ meetings_v2 : "has role meetings"
+    threads ||--o{ meetings_v2 : "has thread-only meetings"
     threads }o--o{ roles : "linked via thread_roles"
 ```
 
@@ -291,9 +286,17 @@ erDiagram
 - **Company → Roles**: One company has many roles (1:N)
 - **Role → JobDescription**: One role has at most one JD record (1:1)
 - **Contact → Threads**: One contact can have many threads (1:N, optional)
-- **Company → Meetings**: One company has many meetings (1:N)
-- **Meeting ↔ Threads**: Many-to-many via `meeting_threads`
-- **Thread ↔ Roles**: Many-to-many via `thread_roles` (idempotent linking)
+- **Role → Meetings (v2)**: One role has many meetings (1:N) - role meetings
+- **Thread → Meetings (v2)**: One thread has many meetings (1:N) - thread-only meetings
+- **Meeting XOR Constraint**: A meeting belongs to exactly one of: Role OR Thread (not both, not neither)
+- **Thread ↔ Roles**: Many-to-many via `thread_roles`
+
+### Legacy Tables (deprecated, not used by new code)
+
+The following tables exist but are no longer used by application code:
+
+- `meetings` - legacy meetings table (company_id based)
+- `meeting_threads` - legacy meeting-thread join table (idempotent linking)
 
 ## Hybrid Storage Model
 

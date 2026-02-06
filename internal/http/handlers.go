@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"jobtracker/internal/app"
+	"jobtracker/internal/domain"
 	"jobtracker/internal/http/views"
 
 	"github.com/go-chi/chi/v5"
@@ -15,13 +16,14 @@ import (
 
 // Handlers holds all HTTP handler dependencies
 type Handlers struct {
-	companyService *app.CompanyService
-	contactService *app.ContactService
-	threadService  *app.ThreadService
-	meetingService *app.MeetingService
-	jdService      *app.JDService
-	exportService  *app.ExportService
-	views          *views.Views
+	companyService   *app.CompanyService
+	contactService   *app.ContactService
+	threadService    *app.ThreadService
+	meetingService   *app.MeetingService
+	meetingV2Service *app.MeetingV2Service
+	jdService        *app.JDService
+	exportService    *app.ExportService
+	views            *views.Views
 }
 
 // NewHandlers creates a new Handlers instance
@@ -30,6 +32,7 @@ func NewHandlers(
 	contactService *app.ContactService,
 	threadService *app.ThreadService,
 	meetingService *app.MeetingService,
+	meetingV2Service *app.MeetingV2Service,
 	jdService *app.JDService,
 	exportService *app.ExportService,
 ) *Handlers {
@@ -39,13 +42,14 @@ func NewHandlers(
 	}
 
 	return &Handlers{
-		companyService: companyService,
-		contactService: contactService,
-		threadService:  threadService,
-		meetingService: meetingService,
-		jdService:      jdService,
-		exportService:  exportService,
-		views:          v,
+		companyService:   companyService,
+		contactService:   contactService,
+		threadService:    threadService,
+		meetingService:   meetingService,
+		meetingV2Service: meetingV2Service,
+		jdService:        jdService,
+		exportService:    exportService,
+		views:            v,
 	}
 }
 
@@ -69,12 +73,22 @@ type RoleResponse struct {
 	FolderPath string `json:"folder_path"`
 }
 
-// MeetingResponse is the response for a meeting
+// MeetingResponse is the response for a meeting (legacy)
 type MeetingResponse struct {
 	ID         string `json:"id"`
 	OccurredAt string `json:"occurred_at"`
 	Title      string `json:"title"`
 	CompanyID  string `json:"company_id"`
+	PathMD     string `json:"path_md"`
+}
+
+// MeetingV2Response is the response for a meeting_v2
+type MeetingV2Response struct {
+	ID         string `json:"id"`
+	OccurredAt string `json:"occurred_at"`
+	Title      string `json:"title"`
+	RoleID     string `json:"role_id,omitempty"`
+	ThreadID   string `json:"thread_id,omitempty"`
 	PathMD     string `json:"path_md"`
 }
 
@@ -773,10 +787,38 @@ func (h *Handlers) HandleThreadPage() http.HandlerFunc {
 			return
 		}
 
+		// Get thread-only meetings from meetings_v2
+		threadMeetings, err := h.meetingV2Service.ListMeetingsByThread(r.Context(), id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Get role meetings from linked roles (meetings_v2)
+		// Group by role for display
+		type RoleMeetingsGroup struct {
+			Role     *domain.Role
+			Company  *domain.Company
+			Meetings []*domain.MeetingV2
+		}
+		var roleMeetingsGroups []RoleMeetingsGroup
+		for _, roleWithCompany := range thread.Roles {
+			meetings, err := h.meetingV2Service.ListMeetingsByRole(r.Context(), roleWithCompany.Role.ID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			roleMeetingsGroups = append(roleMeetingsGroups, RoleMeetingsGroup{
+				Role:     roleWithCompany.Role,
+				Company:  roleWithCompany.Company,
+				Meetings: meetings,
+			})
+		}
+
 		// Get all roles for the link role dropdown
 		allRoles := h.getAllRolesForDropdown(r.Context())
 
-		// Get all companies for the meeting form
+		// Get all companies for the legacy meeting form
 		companies, _ := h.companyService.ListCompanies(r.Context())
 		var companyList []struct {
 			Slug string
@@ -794,14 +836,16 @@ func (h *Handlers) HandleThreadPage() http.HandlerFunc {
 		errorMsg := r.URL.Query().Get("error")
 
 		data := map[string]interface{}{
-			"Title":     thread.Thread.Title,
-			"Thread":    thread.Thread,
-			"Meetings":  thread.Meetings,
-			"Roles":     thread.Roles,
-			"AllRoles":  allRoles,
-			"Companies": companyList,
-			"Success":   successMsg,
-			"Error":     errorMsg,
+			"Title":              thread.Thread.Title,
+			"Thread":             thread.Thread,
+			"Meetings":           thread.Meetings, // Legacy meetings for backward compatibility
+			"ThreadMeetings":     threadMeetings,  // Thread-only meetings (v2)
+			"RoleMeetingsGroups": roleMeetingsGroups,
+			"Roles":              thread.Roles,
+			"AllRoles":           allRoles,
+			"Companies":          companyList,
+			"Success":            successMsg,
+			"Error":              errorMsg,
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1205,15 +1249,22 @@ func (h *Handlers) HandleRolePage() http.HandlerFunc {
 		}
 
 		// Find the role
-		var role interface{}
-		for _, r := range company.Roles {
-			if r.Slug == roleSlug {
-				role = r
+		var role *domain.Role
+		for _, ro := range company.Roles {
+			if ro.Slug == roleSlug {
+				role = ro
 				break
 			}
 		}
 		if role == nil {
 			http.Error(w, "role not found", http.StatusNotFound)
+			return
+		}
+
+		// Get meetings for this role (v2)
+		meetings, err := h.meetingV2Service.ListMeetingsByRole(r.Context(), role.ID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -1253,6 +1304,7 @@ func (h *Handlers) HandleRolePage() http.HandlerFunc {
 			"Role":        role,
 			"JD":          jdData,
 			"AllStatuses": allStatuses,
+			"Meetings":    meetings,
 			"Success":     successMsg,
 			"Error":       errorMsg,
 		}
@@ -1340,5 +1392,171 @@ func (h *Handlers) HandleAttachJDForm() http.HandlerFunc {
 		}
 
 		http.Redirect(w, r, redirectURL+"?success=Job+description+attached", http.StatusSeeOther)
+	}
+}
+
+// --- MeetingV2 Handlers ---
+
+// CreateRoleMeetingRequest is the request body for creating a role meeting (v2)
+type CreateRoleMeetingRequest struct {
+	OccurredAt string `json:"occurred_at"`
+	Title      string `json:"title"`
+}
+
+// HandleCreateRoleMeetingV2 handles POST /api/companies/{companySlug}/roles/{roleSlug}/meetings (JSON)
+func (h *Handlers) HandleCreateRoleMeetingV2() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		companySlug := chi.URLParam(r, "companySlug")
+		roleSlug := chi.URLParam(r, "roleSlug")
+
+		var req CreateRoleMeetingRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if req.Title == "" || req.OccurredAt == "" {
+			http.Error(w, "title and occurred_at are required", http.StatusBadRequest)
+			return
+		}
+
+		meeting, err := h.meetingV2Service.CreateRoleMeeting(r.Context(), app.CreateRoleMeetingInput{
+			CompanySlug: companySlug,
+			RoleSlug:    roleSlug,
+			OccurredAt:  req.OccurredAt,
+			Title:       req.Title,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(MeetingV2Response{
+			ID:         meeting.ID,
+			OccurredAt: meeting.OccurredAt.Format(time.RFC3339),
+			Title:      meeting.Title,
+			RoleID:     meeting.RoleID,
+			PathMD:     meeting.PathMD,
+		})
+	}
+}
+
+// CreateThreadMeetingV2Request is the request body for creating a thread-only meeting (v2)
+type CreateThreadMeetingV2Request struct {
+	OccurredAt string `json:"occurred_at"`
+	Title      string `json:"title"`
+}
+
+// HandleCreateThreadMeetingV2 handles POST /api/threads/{id}/meetings (JSON)
+func (h *Handlers) HandleCreateThreadMeetingV2() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		threadID := chi.URLParam(r, "id")
+
+		var req CreateThreadMeetingV2Request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if req.Title == "" || req.OccurredAt == "" {
+			http.Error(w, "title and occurred_at are required", http.StatusBadRequest)
+			return
+		}
+
+		meeting, err := h.meetingV2Service.CreateThreadMeeting(r.Context(), app.CreateThreadMeetingInput{
+			ThreadID:   threadID,
+			OccurredAt: req.OccurredAt,
+			Title:      req.Title,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(MeetingV2Response{
+			ID:         meeting.ID,
+			OccurredAt: meeting.OccurredAt.Format(time.RFC3339),
+			Title:      meeting.Title,
+			ThreadID:   meeting.ThreadID,
+			PathMD:     meeting.PathMD,
+		})
+	}
+}
+
+// HandleCreateRoleMeetingV2Form handles POST /companies/{companySlug}/roles/{roleSlug}/meetings/new (HTML form)
+func (h *Handlers) HandleCreateRoleMeetingV2Form() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		companySlug := chi.URLParam(r, "companySlug")
+		roleSlug := chi.URLParam(r, "roleSlug")
+		redirectURL := "/companies/" + companySlug + "/roles/" + roleSlug
+
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, redirectURL+"?error=Failed+to+parse+form", http.StatusSeeOther)
+			return
+		}
+
+		title := r.FormValue("title")
+		occurredAt := r.FormValue("occurred_at")
+
+		if title == "" || occurredAt == "" {
+			http.Redirect(w, r, redirectURL+"?error=Title+and+date+are+required", http.StatusSeeOther)
+			return
+		}
+
+		// Convert datetime-local to RFC3339
+		occurredAtRFC := occurredAt + ":00Z"
+
+		_, err := h.meetingV2Service.CreateRoleMeeting(r.Context(), app.CreateRoleMeetingInput{
+			CompanySlug: companySlug,
+			RoleSlug:    roleSlug,
+			OccurredAt:  occurredAtRFC,
+			Title:       title,
+		})
+		if err != nil {
+			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
+		}
+
+		http.Redirect(w, r, redirectURL+"?success=Meeting+created", http.StatusSeeOther)
+	}
+}
+
+// HandleCreateThreadMeetingV2Form handles POST /threads/{id}/meetings/v2/new (HTML form)
+func (h *Handlers) HandleCreateThreadMeetingV2Form() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		threadID := chi.URLParam(r, "id")
+		redirectURL := "/threads/" + threadID
+
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, redirectURL+"?error=Failed+to+parse+form", http.StatusSeeOther)
+			return
+		}
+
+		title := r.FormValue("title")
+		occurredAt := r.FormValue("occurred_at")
+
+		if title == "" || occurredAt == "" {
+			http.Redirect(w, r, redirectURL+"?error=Title+and+date+are+required", http.StatusSeeOther)
+			return
+		}
+
+		// Convert datetime-local to RFC3339
+		occurredAtRFC := occurredAt + ":00Z"
+
+		_, err := h.meetingV2Service.CreateThreadMeeting(r.Context(), app.CreateThreadMeetingInput{
+			ThreadID:   threadID,
+			OccurredAt: occurredAtRFC,
+			Title:      title,
+		})
+		if err != nil {
+			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
+		}
+
+		http.Redirect(w, r, redirectURL+"?success=Meeting+created", http.StatusSeeOther)
 	}
 }

@@ -435,17 +435,15 @@ func TestSmoke_HTMLPages(t *testing.T) {
 	env.ReadJSON(threadResp, &thread)
 	threadID := thread["id"].(string)
 
-	// Create a meeting
-	env.PostJSON("/api/meetings", map[string]string{
-		"company_slug": "html-test-company",
-		"thread_id":    threadID,
-		"occurred_at":  "2024-01-15T10:00:00Z",
-		"title":        "HTML Test Meeting",
-	})
-
-	// Link thread to role
+	// Link thread to role first
 	env.PostJSON("/api/threads/"+threadID+"/roles", map[string]string{
 		"role_ref": "html-test-company/html-test-role",
+	})
+
+	// Create a role meeting (v2) - will appear in the role meetings section
+	env.PostJSON("/api/companies/html-test-company/roles/html-test-role/meetings", map[string]string{
+		"occurred_at": "2024-01-15T10:00:00Z",
+		"title":       "HTML Test Meeting",
 	})
 
 	// Test GET /companies page
@@ -469,8 +467,9 @@ func TestSmoke_HTMLPages(t *testing.T) {
 	if !strings.Contains(companyBody, "HTML Test Role") {
 		t.Error("/companies/{slug} page should contain role title")
 	}
-	if !strings.Contains(companyBody, "HTML Test Meeting") {
-		t.Error("/companies/{slug} page should contain meeting title")
+	// Company page should show the Add Role form
+	if !strings.Contains(companyBody, "Add Role") {
+		t.Error("/companies/{slug} page should contain Add Role form")
 	}
 
 	// Test GET /threads/{id} page
@@ -602,49 +601,49 @@ func TestUI_CreateRoleViaForm(t *testing.T) {
 func TestUI_CreateMeetingViaForm(t *testing.T) {
 	env := testharness.NewTestEnv(t)
 
-	// Create a company first
+	// Create a company and role first
 	env.PostFormFollowRedirect("/companies/new", map[string]string{
 		"slug": "meeting-test-company",
 		"name": "Meeting Test Company",
 	})
-
-	// Create a thread via API (for the meeting dropdown)
-	threadResp := env.PostJSON("/api/threads", map[string]string{
-		"title": "Test Thread for Meeting",
+	env.PostFormFollowRedirect("/companies/meeting-test-company/roles/new", map[string]string{
+		"slug":  "meeting-test-role",
+		"title": "Meeting Test Role",
 	})
-	var thread map[string]interface{}
-	env.ReadJSON(threadResp, &thread)
-	threadID := thread["id"].(string)
 
-	// Verify company page shows the thread in dropdown
+	// Verify company page shows the role
 	companyResp := env.Get("/companies/meeting-test-company")
 	env.AssertStatus(companyResp, 200)
 	companyBody := env.ReadBody(companyResp)
-	if !strings.Contains(companyBody, "Add Meeting") {
-		t.Error("Company page should contain 'Add Meeting' form")
-	}
-	if !strings.Contains(companyBody, "Test Thread for Meeting") {
-		t.Error("Company page should show thread in dropdown")
+	if !strings.Contains(companyBody, "Meeting Test Role") {
+		t.Error("Company page should contain the role")
 	}
 
-	// Submit the form to create a meeting
-	meetingResp := env.PostFormFollowRedirect("/companies/meeting-test-company/meetings/new", map[string]string{
+	// Verify role page shows "Add Meeting" form
+	roleResp := env.Get("/companies/meeting-test-company/roles/meeting-test-role")
+	env.AssertStatus(roleResp, 200)
+	roleBody := env.ReadBody(roleResp)
+	if !strings.Contains(roleBody, "Add Meeting") {
+		t.Error("Role page should contain 'Add Meeting' form")
+	}
+
+	// Submit the form to create a role meeting
+	meetingResp := env.PostFormFollowRedirect("/companies/meeting-test-company/roles/meeting-test-role/meetings/new", map[string]string{
 		"title":       "UI Test Meeting",
 		"occurred_at": "2024-06-15T14:30",
-		"thread_id":   threadID,
 	})
 	env.AssertStatus(meetingResp, 200)
 
-	// Verify the meeting appears in the page
+	// Verify the meeting appears in the role page
 	meetingBody := env.ReadBody(meetingResp)
 	if !strings.Contains(meetingBody, "UI Test Meeting") {
-		t.Error("Created meeting should appear in company page")
+		t.Error("Created meeting should appear in role page")
 	}
 
 	// Find the meeting note file path
-	// The path format is data/companies/{slug}/meetings/{date}-{title-slug}.md
-	if !env.FileExists("data/companies/meeting-test-company/meetings") {
-		t.Error("Meetings folder should exist")
+	// The path format is data/companies/{slug}/roles/{role}/meetings/{date}_{title}_{id}.md
+	if !env.FileExists("data/companies/meeting-test-company/roles/meeting-test-role/meetings") {
+		t.Error("Role meetings folder should exist")
 	}
 }
 
@@ -1098,6 +1097,76 @@ func TestExport_IncludesStatusAndComputedStatus(t *testing.T) {
 	}
 }
 
+// R5 Test: Export includes meetings_v2 data
+func TestExport_IncludesMeetingsV2(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a company and role
+	env.PostJSON("/api/companies", map[string]string{
+		"slug": "export-v2-company",
+		"name": "Export V2 Company",
+	})
+	env.PostJSON("/api/companies/export-v2-company/roles", map[string]string{
+		"slug":  "export-v2-role",
+		"title": "Export V2 Role",
+	})
+
+	// Create a role meeting using v2 API
+	meetingResp := env.PostJSON("/api/companies/export-v2-company/roles/export-v2-role/meetings", map[string]string{
+		"occurred_at": "2024-09-01T10:00:00Z",
+		"title":       "V2 Export Test Meeting",
+	})
+	env.AssertStatus(meetingResp, 201)
+
+	var meeting map[string]interface{}
+	env.ReadJSON(meetingResp, &meeting)
+	meetingID := meeting["id"].(string)
+
+	// Also create a thread meeting
+	threadResp := env.PostJSON("/api/threads", map[string]string{
+		"title": "Export V2 Thread",
+	})
+	var thread map[string]interface{}
+	env.ReadJSON(threadResp, &thread)
+	threadID := thread["id"].(string)
+
+	threadMeetingResp := env.PostJSON("/api/threads/"+threadID+"/meetings", map[string]string{
+		"occurred_at": "2024-09-02T11:00:00Z",
+		"title":       "V2 Thread Export Test Meeting",
+	})
+	env.AssertStatus(threadMeetingResp, 201)
+
+	// Export
+	env.PostJSON("/api/export", nil)
+
+	// Verify meetings_v2 section in export
+	exportContent := env.ReadFile("db/export.json")
+
+	if !strings.Contains(exportContent, `"meetings_v2"`) {
+		t.Error("export.json should contain meetings_v2 section")
+	}
+	if !strings.Contains(exportContent, meetingID) {
+		t.Error("export.json should contain the role meeting ID")
+	}
+	if !strings.Contains(exportContent, "V2 Export Test Meeting") {
+		t.Error("export.json should contain the role meeting title")
+	}
+	if !strings.Contains(exportContent, "V2 Thread Export Test Meeting") {
+		t.Error("export.json should contain the thread meeting title")
+	}
+
+	// Verify determinism with meetings_v2
+	export1 := env.ReadFile("db/export.json")
+	env.PostJSON("/api/export", nil)
+	export2 := env.ReadFile("db/export.json")
+
+	export1Lines := stripExportedAt(export1)
+	export2Lines := stripExportedAt(export2)
+	if export1Lines != export2Lines {
+		t.Error("Export should be deterministic including meetings_v2 data")
+	}
+}
+
 // M2 Test: Meeting IDs are 8-char short IDs, and filenames use short IDs
 func TestBehavioral_MeetingShortIDs(t *testing.T) {
 	env := testharness.NewTestEnv(t)
@@ -1186,5 +1255,187 @@ func TestUI_CreateMeetingWithShortID(t *testing.T) {
 	pathMD := meeting["path_md"].(string)
 	if !strings.HasSuffix(pathMD, "_"+meetingID+".md") {
 		t.Errorf("Meeting filename should end with 8-char ID, got path: %s", pathMD)
+	}
+}
+
+// R3 E2E Test: Role meeting creation (v2) creates file under role folder
+func TestMeetingV2_CreateRoleMeeting(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a company
+	companyResp := env.PostJSON("/api/companies", map[string]string{
+		"slug": "v2-role-meeting-company",
+		"name": "V2 Role Meeting Company",
+	})
+	env.AssertStatus(companyResp, 201)
+
+	// Create a role
+	roleResp := env.PostJSON("/api/companies/v2-role-meeting-company/roles", map[string]string{
+		"slug":  "backend-engineer",
+		"title": "Backend Engineer",
+	})
+	env.AssertStatus(roleResp, 201)
+
+	// Create a role meeting via v2 API
+	meetingResp := env.PostJSON("/api/companies/v2-role-meeting-company/roles/backend-engineer/meetings", map[string]string{
+		"occurred_at": "2024-06-15T10:00:00Z",
+		"title":       "Technical Interview",
+	})
+	env.AssertStatus(meetingResp, 201)
+
+	var meeting map[string]interface{}
+	env.ReadJSON(meetingResp, &meeting)
+
+	// Verify meeting ID is 8 characters
+	meetingID := meeting["id"].(string)
+	if len(meetingID) != 8 {
+		t.Errorf("Expected meeting ID to be 8 characters, got %d: %q", len(meetingID), meetingID)
+	}
+
+	// Verify role_id is set
+	roleID := meeting["role_id"].(string)
+	if roleID == "" {
+		t.Error("Expected role_id to be set for role meeting")
+	}
+
+	// Verify thread_id is NOT set
+	if meeting["thread_id"] != nil && meeting["thread_id"].(string) != "" {
+		t.Error("Expected thread_id to be empty for role meeting")
+	}
+
+	// Verify path_md is under role folder
+	pathMD := meeting["path_md"].(string)
+	expectedPrefix := "data/companies/v2-role-meeting-company/roles/backend-engineer/meetings/"
+	if !strings.HasPrefix(pathMD, expectedPrefix) {
+		t.Errorf("Expected path to start with %q, got %q", expectedPrefix, pathMD)
+	}
+
+	// Verify file exists
+	if !env.FileExists(pathMD) {
+		t.Errorf("Meeting note file should exist at %s", pathMD)
+	}
+
+	// Verify file content
+	content := env.ReadFile(pathMD)
+	if !strings.Contains(content, "# Technical Interview") {
+		t.Error("Meeting note should contain title")
+	}
+	if !strings.Contains(content, "meeting_id: "+meetingID) {
+		t.Error("Meeting note should contain meeting_id")
+	}
+}
+
+// R3 E2E Test: Thread-only meeting creation (v2) creates file under thread folder
+func TestMeetingV2_CreateThreadOnlyMeeting(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a thread
+	threadResp := env.PostJSON("/api/threads", map[string]string{
+		"title": "V2 Thread Only Meeting Thread",
+	})
+	env.AssertStatus(threadResp, 201)
+
+	var thread map[string]interface{}
+	env.ReadJSON(threadResp, &thread)
+	threadID := thread["id"].(string)
+
+	// Create a thread-only meeting via v2 API
+	meetingResp := env.PostJSON("/api/threads/"+threadID+"/meetings", map[string]string{
+		"occurred_at": "2024-07-20T14:30:00Z",
+		"title":       "Networking Coffee Chat",
+	})
+	env.AssertStatus(meetingResp, 201)
+
+	var meeting map[string]interface{}
+	env.ReadJSON(meetingResp, &meeting)
+
+	// Verify meeting ID is 8 characters
+	meetingID := meeting["id"].(string)
+	if len(meetingID) != 8 {
+		t.Errorf("Expected meeting ID to be 8 characters, got %d: %q", len(meetingID), meetingID)
+	}
+
+	// Verify thread_id is set
+	returnedThreadID := meeting["thread_id"].(string)
+	if returnedThreadID != threadID {
+		t.Errorf("Expected thread_id %q, got %q", threadID, returnedThreadID)
+	}
+
+	// Verify role_id is NOT set
+	if meeting["role_id"] != nil && meeting["role_id"].(string) != "" {
+		t.Error("Expected role_id to be empty for thread-only meeting")
+	}
+
+	// Verify path_md is under thread folder
+	pathMD := meeting["path_md"].(string)
+	expectedPrefix := "data/threads/" + threadID + "/meetings/"
+	if !strings.HasPrefix(pathMD, expectedPrefix) {
+		t.Errorf("Expected path to start with %q, got %q", expectedPrefix, pathMD)
+	}
+
+	// Verify file exists
+	if !env.FileExists(pathMD) {
+		t.Errorf("Meeting note file should exist at %s", pathMD)
+	}
+
+	// Verify file content
+	content := env.ReadFile(pathMD)
+	if !strings.Contains(content, "# Networking Coffee Chat") {
+		t.Error("Meeting note should contain title")
+	}
+	if !strings.Contains(content, "meeting_id: "+meetingID) {
+		t.Error("Meeting note should contain meeting_id")
+	}
+}
+
+// R3 UI Test: Create role meeting via HTML form
+func TestUI_CreateRoleMeetingV2ViaForm(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create company and role
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "ui-v2-meeting-company",
+		"name": "UI V2 Meeting Company",
+	})
+	env.PostFormFollowRedirect("/companies/ui-v2-meeting-company/roles/new", map[string]string{
+		"slug":  "ui-test-role",
+		"title": "UI Test Role",
+	})
+
+	// Create meeting via form
+	meetingResp := env.PostFormFollowRedirect("/companies/ui-v2-meeting-company/roles/ui-test-role/meetings/new", map[string]string{
+		"title":       "UI Role Meeting",
+		"occurred_at": "2024-08-01T09:00",
+	})
+	env.AssertStatus(meetingResp, 200)
+
+	// Verify meeting file exists in the role folder
+	if !env.FileExists("data/companies/ui-v2-meeting-company/roles/ui-test-role/meetings") {
+		t.Error("Role meetings folder should exist")
+	}
+}
+
+// R3 UI Test: Create thread-only meeting via HTML form
+func TestUI_CreateThreadMeetingV2ViaForm(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a thread
+	threadResp := env.PostJSON("/api/threads", map[string]string{
+		"title": "UI V2 Thread Meeting Thread",
+	})
+	var thread map[string]interface{}
+	env.ReadJSON(threadResp, &thread)
+	threadID := thread["id"].(string)
+
+	// Create thread-only meeting via v2 form
+	meetingResp := env.PostFormFollowRedirect("/threads/"+threadID+"/meetings/v2/new", map[string]string{
+		"title":       "UI Thread Meeting",
+		"occurred_at": "2024-08-02T11:00",
+	})
+	env.AssertStatus(meetingResp, 200)
+
+	// Verify meeting file exists in the thread folder
+	if !env.FileExists("data/threads/" + threadID + "/meetings") {
+		t.Error("Thread meetings folder should exist")
 	}
 }

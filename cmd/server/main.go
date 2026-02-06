@@ -53,6 +53,7 @@ func main() {
 	contactRepo := sqlite.NewContactRepo(db)
 	threadRepo := sqlite.NewThreadRepo(db)
 	meetingRepo := sqlite.NewMeetingRepo(db)
+	meetingV2Repo := sqlite.NewMeetingV2Repo(db)
 	jdRepo := sqlite.NewJobDescriptionRepo(db)
 
 	// Create filestore
@@ -63,11 +64,12 @@ func main() {
 	contactService := app.NewContactService(contactRepo)
 	threadService := app.NewThreadService(threadRepo, meetingRepo, companyRepo, roleRepo)
 	meetingService := app.NewMeetingService(meetingRepo, companyRepo, fs)
+	meetingV2Service := app.NewMeetingV2Service(meetingV2Repo, companyRepo, roleRepo, threadRepo, fs)
 	jdService := app.NewJDService(jdRepo, companyRepo, roleRepo, fs)
 	exportService := app.NewExportService(db, cfg.RepoRoot)
 
 	// Create handlers
-	handlers := httpserver.NewHandlers(companyService, contactService, threadService, meetingService, jdService, exportService)
+	handlers := httpserver.NewHandlers(companyService, contactService, threadService, meetingService, meetingV2Service, jdService, exportService)
 
 	// Create HTTP server
 	server := httpserver.NewServer(handlers)

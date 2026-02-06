@@ -35,6 +35,7 @@ type ExportData struct {
 	Contacts        []ExportContact         `json:"contacts"`
 	Threads         []ExportThread          `json:"threads"`
 	Meetings        []ExportMeeting         `json:"meetings"`
+	MeetingsV2      []ExportMeetingV2       `json:"meetings_v2"`
 	MeetingThreads  []ExportMeetingThread   `json:"meeting_threads"`
 	ThreadRoles     []ExportThreadRole      `json:"thread_roles"`
 	JobDescriptions []ExportJobDescription  `json:"job_descriptions"`
@@ -99,6 +100,18 @@ type ExportMeeting struct {
 	UpdatedAt  string `json:"updated_at"`
 }
 
+// ExportMeetingV2 represents a meeting_v2 in the export
+type ExportMeetingV2 struct {
+	ID         string `json:"id"`
+	OccurredAt string `json:"occurred_at"`
+	Title      string `json:"title"`
+	RoleID     string `json:"role_id,omitempty"`
+	ThreadID   string `json:"thread_id,omitempty"`
+	PathMD     string `json:"path_md"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
 // ExportMeetingThread represents a meeting-thread link in the export
 type ExportMeetingThread struct {
 	MeetingID string `json:"meeting_id"`
@@ -128,6 +141,7 @@ func (s *ExportService) Export(ctx context.Context) error {
 		Contacts:        []ExportContact{},
 		Threads:         []ExportThread{},
 		Meetings:        []ExportMeeting{},
+		MeetingsV2:      []ExportMeetingV2{},
 		MeetingThreads:  []ExportMeetingThread{},
 		ThreadRoles:     []ExportThreadRole{},
 		JobDescriptions: []ExportJobDescription{},
@@ -227,7 +241,7 @@ func (s *ExportService) Export(ctx context.Context) error {
 	}
 	rows.Close()
 
-	// Export meetings (ordered by id for determinism)
+	// Export meetings (ordered by id for determinism) - legacy table
 	rows, err = s.db.QueryContext(ctx, `SELECT id, occurred_at, title, company_id, path_md, created_at, updated_at FROM meetings ORDER BY id`)
 	if err != nil {
 		return fmt.Errorf("exporting meetings: %w", err)
@@ -242,6 +256,31 @@ func (s *ExportService) Export(ctx context.Context) error {
 		m.CreatedAt = createdAt.Format(time.RFC3339)
 		m.UpdatedAt = updatedAt.Format(time.RFC3339)
 		data.Meetings = append(data.Meetings, m)
+	}
+	rows.Close()
+
+	// Export meetings_v2 (ordered by id for determinism) - new ROLE/THREAD model
+	rows, err = s.db.QueryContext(ctx, `SELECT id, occurred_at, title, role_id, thread_id, path_md, created_at, updated_at FROM meetings_v2 ORDER BY id`)
+	if err != nil {
+		return fmt.Errorf("exporting meetings_v2: %w", err)
+	}
+	for rows.Next() {
+		var m ExportMeetingV2
+		var roleID, threadID *string
+		var createdAt, updatedAt time.Time
+		if err := rows.Scan(&m.ID, &m.OccurredAt, &m.Title, &roleID, &threadID, &m.PathMD, &createdAt, &updatedAt); err != nil {
+			rows.Close()
+			return fmt.Errorf("scanning meeting_v2: %w", err)
+		}
+		if roleID != nil {
+			m.RoleID = *roleID
+		}
+		if threadID != nil {
+			m.ThreadID = *threadID
+		}
+		m.CreatedAt = createdAt.Format(time.RFC3339)
+		m.UpdatedAt = updatedAt.Format(time.RFC3339)
+		data.MeetingsV2 = append(data.MeetingsV2, m)
 	}
 	rows.Close()
 

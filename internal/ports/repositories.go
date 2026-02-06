@@ -52,3 +52,16 @@ type JobDescriptionRepository interface {
 	Save(ctx context.Context, jd *domain.RoleJobDescription) error
 	GetByRoleID(ctx context.Context, roleID string) (*domain.RoleJobDescription, error)
 }
+
+// MeetingV2Repository defines operations for meetings_v2 persistence
+// Meetings in v2 belong to exactly one of: Role OR Thread (XOR)
+type MeetingV2Repository interface {
+	// Create inserts a new meeting (must have either RoleID or ThreadID set, not both)
+	Create(ctx context.Context, meeting *domain.MeetingV2) error
+	// GetByID retrieves a meeting by ID
+	GetByID(ctx context.Context, id string) (*domain.MeetingV2, error)
+	// ListByRole retrieves all meetings for a role ordered by occurred_at desc
+	ListByRole(ctx context.Context, roleID string) ([]*domain.MeetingV2, error)
+	// ListByThread retrieves all thread-only meetings for a thread ordered by occurred_at desc
+	ListByThread(ctx context.Context, threadID string) ([]*domain.MeetingV2, error)
+}

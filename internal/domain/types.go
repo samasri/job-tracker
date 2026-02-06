@@ -168,3 +168,28 @@ type RoleResume struct {
 	SentAt   time.Time
 	PathJSON string
 }
+
+// MeetingV2 represents a meeting in the new model where a meeting belongs to
+// exactly one of: Role OR Thread (XOR constraint).
+// - Role meeting: belongs to a Role, has no direct thread association
+// - Thread-only meeting: belongs to a Thread, has no company/role association
+type MeetingV2 struct {
+	ID         string
+	OccurredAt time.Time
+	Title      string
+	RoleID     string // Set for role meetings, empty for thread-only meetings
+	ThreadID   string // Set for thread-only meetings, empty for role meetings
+	PathMD     string // relative path to markdown file
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+// IsRoleMeeting returns true if this is a role meeting
+func (m *MeetingV2) IsRoleMeeting() bool {
+	return m.RoleID != ""
+}
+
+// IsThreadMeeting returns true if this is a thread-only meeting
+func (m *MeetingV2) IsThreadMeeting() bool {
+	return m.ThreadID != ""
+}

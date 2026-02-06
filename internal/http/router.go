@@ -53,8 +53,13 @@ func (s *Server) routes() {
 		r.Get("/threads/{id}", s.handlers.HandleGetThread())
 		r.Post("/threads/{id}/roles", s.handlers.HandleLinkRole())
 
-		// Meetings
+		// Meetings (legacy)
 		r.Post("/meetings", s.handlers.HandleCreateMeeting())
+
+		// Meetings V2 - role meetings
+		r.Post("/companies/{companySlug}/roles/{roleSlug}/meetings", s.handlers.HandleCreateRoleMeetingV2())
+		// Meetings V2 - thread-only meetings
+		r.Post("/threads/{id}/meetings", s.handlers.HandleCreateThreadMeetingV2())
 
 		// Job Descriptions
 		r.Post("/roles/{companySlug}/{roleSlug}/jd", s.handlers.HandleAttachJD())
@@ -76,11 +81,13 @@ func (s *Server) routes() {
 	s.router.Get("/companies/{companySlug}/roles/{roleSlug}", s.handlers.HandleRolePage())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/status", s.handlers.HandleUpdateRoleStatusForm())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/jd", s.handlers.HandleAttachJDForm())
+	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/meetings/new", s.handlers.HandleCreateRoleMeetingV2Form())
 	s.router.Get("/threads", s.handlers.HandleThreadsPage())
 	s.router.Post("/threads/new", s.handlers.HandleCreateThreadForm())
 	s.router.Get("/threads/{id}", s.handlers.HandleThreadPage())
 	s.router.Post("/threads/{id}/roles/link", s.handlers.HandleLinkRoleForm())
 	s.router.Post("/threads/{id}/meetings/new", s.handlers.HandleCreateMeetingFromThreadForm())
+	s.router.Post("/threads/{id}/meetings/v2/new", s.handlers.HandleCreateThreadMeetingV2Form())
 	s.router.Post("/contacts/new", s.handlers.HandleCreateContactForm())
 	s.router.Post("/export", s.handlers.HandleExportPage())
 }

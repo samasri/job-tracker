@@ -26,9 +26,6 @@ RUN mkdir -p /app/data /app/db
 # Copy binary
 COPY --from=builder /jobtracker /app/jobtracker
 
-# Copy web assets (templates, static files)
-COPY web/ /app/web/
-
 EXPOSE 8080
 
 ENV JOBTRACKER_ADDR=0.0.0.0:8080

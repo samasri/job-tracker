@@ -13,8 +13,16 @@ type FileStore interface {
 	// CreateRoleFolder creates the role folder structure
 	CreateRoleFolder(ctx context.Context, companySlug, roleSlug string) (folderPath string, err error)
 
-	// CreateMeetingNote creates a meeting note file
+	// CreateMeetingNote creates a meeting note file (legacy, for old meetings table)
 	CreateMeetingNote(ctx context.Context, companySlug, meetingID string, occurredAt, title string) (filePath string, err error)
+
+	// CreateRoleMeetingNote creates a meeting note file for a role meeting (meetings_v2)
+	// Path: data/companies/<company>/roles/<role>/meetings/<YYYY-MM-DD>_<title>_<id>.md
+	CreateRoleMeetingNote(ctx context.Context, companySlug, roleSlug, occurredAt, title, meetingID string) (filePath string, err error)
+
+	// CreateThreadMeetingNote creates a meeting note file for a thread-only meeting (meetings_v2)
+	// Path: data/threads/<thread-id>/meetings/<YYYY-MM-DD>_<title>_<id>.md
+	CreateThreadMeetingNote(ctx context.Context, threadID, occurredAt, title, meetingID string) (filePath string, err error)
 
 	// SaveJobDescriptionHTML saves the HTML job description
 	SaveJobDescriptionHTML(ctx context.Context, companySlug, roleSlug string, content string) (filePath string, err error)

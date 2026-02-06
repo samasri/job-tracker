@@ -32,12 +32,13 @@ type TestEnv struct {
 	Client   *http.Client
 
 	// Services (for tests that need direct access)
-	CompanyService *app.CompanyService
-	ContactService *app.ContactService
-	ThreadService  *app.ThreadService
-	MeetingService *app.MeetingService
-	JDService      *app.JDService
-	ExportService  *app.ExportService
+	CompanyService   *app.CompanyService
+	ContactService   *app.ContactService
+	ThreadService    *app.ThreadService
+	MeetingService   *app.MeetingService
+	MeetingV2Service *app.MeetingV2Service
+	JDService        *app.JDService
+	ExportService    *app.ExportService
 }
 
 // NewTestEnv creates a new test environment with temp dirs and server
@@ -81,6 +82,7 @@ func NewTestEnv(t *testing.T) *TestEnv {
 	contactRepo := sqlite.NewContactRepo(db)
 	threadRepo := sqlite.NewThreadRepo(db)
 	meetingRepo := sqlite.NewMeetingRepo(db)
+	meetingV2Repo := sqlite.NewMeetingV2Repo(db)
 	jdRepo := sqlite.NewJobDescriptionRepo(db)
 
 	// Create filestore
@@ -91,29 +93,31 @@ func NewTestEnv(t *testing.T) *TestEnv {
 	contactService := app.NewContactService(contactRepo)
 	threadService := app.NewThreadService(threadRepo, meetingRepo, companyRepo, roleRepo)
 	meetingService := app.NewMeetingService(meetingRepo, companyRepo, fs)
+	meetingV2Service := app.NewMeetingV2Service(meetingV2Repo, companyRepo, roleRepo, threadRepo, fs)
 	jdService := app.NewJDService(jdRepo, companyRepo, roleRepo, fs)
 	exportService := app.NewExportService(db, repoRoot)
 
 	// Create handlers
-	handlers := httpserver.NewHandlers(companyService, contactService, threadService, meetingService, jdService, exportService)
+	handlers := httpserver.NewHandlers(companyService, contactService, threadService, meetingService, meetingV2Service, jdService, exportService)
 
 	// Create HTTP server
 	server := httpserver.NewServer(handlers)
 	ts := httptest.NewServer(server)
 
 	env := &TestEnv{
-		T:              t,
-		Server:         ts,
-		DB:             db,
-		RepoRoot:       repoRoot,
-		DBPath:         dbPath,
-		Client:         ts.Client(),
-		CompanyService: companyService,
-		ContactService: contactService,
-		ThreadService:  threadService,
-		MeetingService: meetingService,
-		JDService:      jdService,
-		ExportService:  exportService,
+		T:                t,
+		Server:           ts,
+		DB:               db,
+		RepoRoot:         repoRoot,
+		DBPath:           dbPath,
+		Client:           ts.Client(),
+		CompanyService:   companyService,
+		ContactService:   contactService,
+		ThreadService:    threadService,
+		MeetingService:   meetingService,
+		MeetingV2Service: meetingV2Service,
+		JDService:        jdService,
+		ExportService:    exportService,
 	}
 
 	// Register cleanup

@@ -96,6 +96,74 @@ occurred_at: %s
 	return filePath, nil
 }
 
+// CreateRoleMeetingNote creates a meeting note file for a role meeting
+// Path: data/companies/<company>/roles/<role>/meetings/<YYYY-MM-DD>_<title>_<id>.md
+func (fs *FileStore) CreateRoleMeetingNote(ctx context.Context, companySlug, roleSlug, occurredAt, title, meetingID string) (string, error) {
+	// Format: YYYY-MM-DD_<title>_<id>.md
+	safeTitle := strings.ReplaceAll(title, " ", "-")
+	safeTitle = strings.ReplaceAll(safeTitle, "/", "-")
+	filename := fmt.Sprintf("%s_%s_%s.md", occurredAt[:10], safeTitle, meetingID)
+
+	// Create meetings folder under role if it doesn't exist
+	meetingsDir := filepath.Join("data", "companies", companySlug, "roles", roleSlug, "meetings")
+	absMeetingsDir := filepath.Join(fs.repoRoot, meetingsDir)
+	if err := os.MkdirAll(absMeetingsDir, 0755); err != nil {
+		return "", fmt.Errorf("creating role meetings folder: %w", err)
+	}
+
+	filePath := filepath.Join(meetingsDir, filename)
+	absPath := filepath.Join(fs.repoRoot, filePath)
+
+	content := fmt.Sprintf(`# %s
+
+meeting_id: %s
+occurred_at: %s
+
+## Notes
+
+`, title, meetingID, occurredAt)
+
+	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("creating role meeting note: %w", err)
+	}
+
+	return filePath, nil
+}
+
+// CreateThreadMeetingNote creates a meeting note file for a thread-only meeting
+// Path: data/threads/<thread-id>/meetings/<YYYY-MM-DD>_<title>_<id>.md
+func (fs *FileStore) CreateThreadMeetingNote(ctx context.Context, threadID, occurredAt, title, meetingID string) (string, error) {
+	// Format: YYYY-MM-DD_<title>_<id>.md
+	safeTitle := strings.ReplaceAll(title, " ", "-")
+	safeTitle = strings.ReplaceAll(safeTitle, "/", "-")
+	filename := fmt.Sprintf("%s_%s_%s.md", occurredAt[:10], safeTitle, meetingID)
+
+	// Create meetings folder under thread if it doesn't exist
+	meetingsDir := filepath.Join("data", "threads", threadID, "meetings")
+	absMeetingsDir := filepath.Join(fs.repoRoot, meetingsDir)
+	if err := os.MkdirAll(absMeetingsDir, 0755); err != nil {
+		return "", fmt.Errorf("creating thread meetings folder: %w", err)
+	}
+
+	filePath := filepath.Join(meetingsDir, filename)
+	absPath := filepath.Join(fs.repoRoot, filePath)
+
+	content := fmt.Sprintf(`# %s
+
+meeting_id: %s
+occurred_at: %s
+
+## Notes
+
+`, title, meetingID, occurredAt)
+
+	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("creating thread meeting note: %w", err)
+	}
+
+	return filePath, nil
+}
+
 // SaveJobDescriptionHTML saves the HTML job description
 func (fs *FileStore) SaveJobDescriptionHTML(ctx context.Context, companySlug, roleSlug string, content string) (string, error) {
 	filePath := filepath.Join("data", "companies", companySlug, "roles", roleSlug, "job.html")
