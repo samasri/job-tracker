@@ -1,0 +1,33 @@
+{{define "content"}}
+<h1>Job Description</h1>
+<p>
+    <a href="/companies/{{.Company.Slug}}">{{.Company.Name}}</a> /
+    <a href="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}">{{.Role.Title}}</a>
+</p>
+<p>
+    <a href="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}" class="button button-small btn-secondary">&larr; Back to Role</a>
+</p>
+
+<div class="jd-viewer-container">
+    <iframe
+        src="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/jd/raw"
+        sandbox="allow-same-origin"
+        class="jd-iframe"
+        title="Job Description"></iframe>
+</div>
+
+<style>
+    .jd-viewer-container {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+        margin-top: 20px;
+    }
+    .jd-iframe {
+        width: 100%;
+        height: 80vh;
+        border: none;
+    }
+</style>
+{{end}}

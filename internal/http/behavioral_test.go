@@ -1338,6 +1338,7 @@ func TestMeetingV2_CreateThreadOnlyMeeting(t *testing.T) {
 	var thread map[string]interface{}
 	env.ReadJSON(threadResp, &thread)
 	threadID := thread["id"].(string)
+	threadSlug := thread["slug"].(string)
 
 	// Create a thread-only meeting via v2 API
 	meetingResp := env.PostJSON("/api/threads/"+threadID+"/meetings", map[string]string{
@@ -1366,11 +1367,15 @@ func TestMeetingV2_CreateThreadOnlyMeeting(t *testing.T) {
 		t.Error("Expected role_id to be empty for thread-only meeting")
 	}
 
-	// Verify path_md is under thread folder
+	// Verify path_md is under thread folder (flattened, using slug, no /meetings subfolder)
 	pathMD := meeting["path_md"].(string)
-	expectedPrefix := "data/threads/" + threadID + "/meetings/"
+	expectedPrefix := "data/threads/" + threadSlug + "/"
 	if !strings.HasPrefix(pathMD, expectedPrefix) {
 		t.Errorf("Expected path to start with %q, got %q", expectedPrefix, pathMD)
+	}
+	// Ensure no /meetings/ subfolder
+	if strings.Contains(pathMD, "/meetings/") {
+		t.Errorf("Expected flattened path (no /meetings/ subfolder), got %q", pathMD)
 	}
 
 	// Verify file exists
@@ -1426,6 +1431,7 @@ func TestUI_CreateThreadMeetingV2ViaForm(t *testing.T) {
 	var thread map[string]interface{}
 	env.ReadJSON(threadResp, &thread)
 	threadID := thread["id"].(string)
+	threadSlug := thread["slug"].(string)
 
 	// Create thread-only meeting via v2 form
 	meetingResp := env.PostFormFollowRedirect("/threads/"+threadID+"/meetings/v2/new", map[string]string{
@@ -1434,8 +1440,101 @@ func TestUI_CreateThreadMeetingV2ViaForm(t *testing.T) {
 	})
 	env.AssertStatus(meetingResp, 200)
 
-	// Verify meeting file exists in the thread folder
-	if !env.FileExists("data/threads/" + threadID + "/meetings") {
-		t.Error("Thread meetings folder should exist")
+	// Verify thread folder exists (flattened - no /meetings subfolder)
+	if !env.FileExists("data/threads/" + threadSlug) {
+		t.Errorf("Thread folder should exist at data/threads/%s", threadSlug)
 	}
+}
+
+// J1 E2E Test: JD viewer displays HTML in sandboxed iframe with CSP
+func TestUI_JDViewer(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create company and role
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "jd-viewer-company",
+		"name": "JD Viewer Company",
+	})
+	env.PostFormFollowRedirect("/companies/jd-viewer-company/roles/new", map[string]string{
+		"slug":  "jd-viewer-role",
+		"title": "JD Viewer Role",
+	})
+
+	// Attach JD with HTML content
+	htmlContent := "<html><body><h1>Test Job Description</h1><p>Requirements: Go, SQL</p></body></html>"
+	jdResp := env.PostMultipart("/companies/jd-viewer-company/roles/jd-viewer-role/jd",
+		map[string]string{"html": htmlContent},
+		nil,
+	)
+	if jdResp.StatusCode != 303 && jdResp.StatusCode != 200 {
+		t.Errorf("Expected redirect or success, got %d", jdResp.StatusCode)
+	}
+
+	// Test JD viewer page loads
+	viewerResp := env.Get("/companies/jd-viewer-company/roles/jd-viewer-role/jd")
+	env.AssertStatus(viewerResp, 200)
+	viewerBody := env.ReadBody(viewerResp)
+
+	// Verify viewer page contains expected elements
+	if !strings.Contains(viewerBody, "Job Description") {
+		t.Error("JD viewer page should contain 'Job Description' heading")
+	}
+	if !strings.Contains(viewerBody, "jd-viewer-company") {
+		t.Error("JD viewer page should contain company link")
+	}
+	if !strings.Contains(viewerBody, "jd-viewer-role") {
+		t.Error("JD viewer page should contain role link")
+	}
+	if !strings.Contains(viewerBody, "iframe") {
+		t.Error("JD viewer page should contain an iframe")
+	}
+	if !strings.Contains(viewerBody, `sandbox="allow-same-origin"`) {
+		t.Error("JD viewer iframe should have sandbox attribute")
+	}
+	if !strings.Contains(viewerBody, "/jd/raw") {
+		t.Error("JD viewer iframe src should point to /jd/raw")
+	}
+
+	// Test raw JD endpoint returns HTML with CSP header
+	rawResp := env.Get("/companies/jd-viewer-company/roles/jd-viewer-role/jd/raw")
+	env.AssertStatus(rawResp, 200)
+
+	// Check CSP header
+	csp := rawResp.Header.Get("Content-Security-Policy")
+	if csp == "" {
+		t.Error("Raw JD endpoint should set Content-Security-Policy header")
+	}
+	if !strings.Contains(csp, "default-src 'none'") {
+		t.Error("CSP should include default-src 'none'")
+	}
+	if !strings.Contains(csp, "script-src") {
+		// If script-src is not present, default-src 'none' blocks scripts (which is correct)
+	}
+
+	// Check content type
+	contentType := rawResp.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "text/html") {
+		t.Errorf("Expected Content-Type text/html, got %s", contentType)
+	}
+
+	// Check the actual HTML content is returned
+	rawBody := env.ReadBody(rawResp)
+	if !strings.Contains(rawBody, "Test Job Description") {
+		t.Error("Raw JD endpoint should return the JD HTML content")
+	}
+	if !strings.Contains(rawBody, "Requirements: Go, SQL") {
+		t.Error("Raw JD endpoint should return full JD content")
+	}
+
+	// Test 404 for role without JD attached
+	env.PostFormFollowRedirect("/companies/jd-viewer-company/roles/new", map[string]string{
+		"slug":  "no-jd-role",
+		"title": "Role Without JD",
+	})
+	noJDResp := env.Get("/companies/jd-viewer-company/roles/no-jd-role/jd")
+	env.AssertStatus(noJDResp, 404)
+
+	// Test 404 for non-existent company
+	notFoundResp := env.Get("/companies/nonexistent/roles/nonexistent/jd")
+	env.AssertStatus(notFoundResp, 404)
 }

@@ -1,5 +1,8 @@
 {{define "content"}}
 <h1>{{.Thread.Title}}</h1>
+{{if .Thread.FolderPath}}
+<p><span class="path-display">{{.Thread.FolderPath}}</span></p>
+{{end}}
 
 <h2>Linked Roles</h2>
 {{if .Roles}}

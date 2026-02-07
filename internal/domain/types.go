@@ -136,11 +136,14 @@ type Contact struct {
 
 // Thread represents a conversation/relationship container
 type Thread struct {
-	ID        string
-	Title     string
-	ContactID string // optional
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID         string
+	Code       string // 8-char unique code (e.g., "6PPEZJPW")
+	Slug       string // folder slug: "<contact-slug>-<code>" or "thread-<code>"
+	Title      string
+	ContactID  string // optional
+	FolderPath string // relative path to thread folder (e.g., "data/threads/brent-maclerie-6PPEZJPW")
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // Meeting represents a meeting or conversation

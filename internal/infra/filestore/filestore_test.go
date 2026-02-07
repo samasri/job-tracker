@@ -68,15 +68,15 @@ func TestCreateThreadMeetingNote(t *testing.T) {
 	fs := filestore.New(tempDir)
 	ctx := context.Background()
 
-	// Create thread meeting note
-	threadID := "thread-uuid-123"
-	path, err := fs.CreateThreadMeetingNote(ctx, threadID, "2024-07-20T14:30:00Z", "Coffee Chat", "XYZ98765")
+	// Create thread meeting note using thread slug (flattened path, no /meetings subfolder)
+	threadSlug := "john-doe-ABC12345"
+	path, err := fs.CreateThreadMeetingNote(ctx, threadSlug, "2024-07-20T14:30:00Z", "Coffee Chat", "XYZ98765")
 	if err != nil {
 		t.Fatalf("CreateThreadMeetingNote failed: %v", err)
 	}
 
-	// Verify path format
-	expectedPath := "data/threads/thread-uuid-123/meetings/2024-07-20_Coffee-Chat_XYZ98765.md"
+	// Verify path format (flattened - no /meetings subfolder)
+	expectedPath := "data/threads/john-doe-ABC12345/2024-07-20_Coffee-Chat_XYZ98765.md"
 	if path != expectedPath {
 		t.Errorf("Expected path %q, got %q", expectedPath, path)
 	}
@@ -122,8 +122,8 @@ func TestCreateBothMeetingTypes(t *testing.T) {
 		t.Fatalf("CreateRoleMeetingNote failed: %v", err)
 	}
 
-	// Create thread meeting
-	threadPath, err := fs.CreateThreadMeetingNote(ctx, "recruiter-thread", "2024-08-01T11:00:00Z", "Networking Call", "THRD5678")
+	// Create thread meeting (using thread slug, flattened path)
+	threadPath, err := fs.CreateThreadMeetingNote(ctx, "recruiter-jane-XYZ99999", "2024-08-01T11:00:00Z", "Networking Call", "THRD5678")
 	if err != nil {
 		t.Fatalf("CreateThreadMeetingNote failed: %v", err)
 	}
@@ -142,5 +142,10 @@ func TestCreateBothMeetingTypes(t *testing.T) {
 	}
 	if strings.Contains(threadPath, "companies") {
 		t.Error("Thread meeting path should not contain 'companies'")
+	}
+
+	// Verify thread path is flattened (no /meetings subfolder)
+	if strings.Contains(threadPath, "/meetings/") {
+		t.Error("Thread meeting path should be flattened (no /meetings subfolder)")
 	}
 }

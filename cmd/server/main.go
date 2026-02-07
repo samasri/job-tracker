@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -62,7 +63,13 @@ func main() {
 	// Create services
 	companyService := app.NewCompanyService(companyRepo, roleRepo, meetingRepo, fs)
 	contactService := app.NewContactService(contactRepo)
-	threadService := app.NewThreadService(threadRepo, meetingRepo, companyRepo, roleRepo)
+	threadService := app.NewThreadService(threadRepo, meetingRepo, companyRepo, roleRepo, contactRepo)
+
+	// Backfill thread codes for existing threads
+	if err := threadService.BackfillThreadCodes(context.Background()); err != nil {
+		log.Printf("Warning: failed to backfill thread codes: %v", err)
+	}
+
 	meetingService := app.NewMeetingService(meetingRepo, companyRepo, fs)
 	meetingV2Service := app.NewMeetingV2Service(meetingV2Repo, companyRepo, roleRepo, threadRepo, fs)
 	jdService := app.NewJDService(jdRepo, companyRepo, roleRepo, fs)

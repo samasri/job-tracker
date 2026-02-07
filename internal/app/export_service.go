@@ -82,11 +82,14 @@ type ExportContact struct {
 
 // ExportThread represents a thread in the export
 type ExportThread struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	ContactID string `json:"contact_id,omitempty"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID         string `json:"id"`
+	Code       string `json:"code,omitempty"`
+	Slug       string `json:"slug,omitempty"`
+	Title      string `json:"title"`
+	ContactID  string `json:"contact_id,omitempty"`
+	FolderPath string `json:"folder_path,omitempty"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
 }
 
 // ExportMeeting represents a meeting in the export
@@ -220,20 +223,29 @@ func (s *ExportService) Export(ctx context.Context) error {
 	rows.Close()
 
 	// Export threads (ordered by id for determinism)
-	rows, err = s.db.QueryContext(ctx, `SELECT id, title, contact_id, created_at, updated_at FROM threads ORDER BY id`)
+	rows, err = s.db.QueryContext(ctx, `SELECT id, code, slug, title, contact_id, folder_path, created_at, updated_at FROM threads ORDER BY id`)
 	if err != nil {
 		return fmt.Errorf("exporting threads: %w", err)
 	}
 	for rows.Next() {
 		var t ExportThread
-		var contactID *string
+		var code, slug, contactID, folderPath *string
 		var createdAt, updatedAt time.Time
-		if err := rows.Scan(&t.ID, &t.Title, &contactID, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &code, &slug, &t.Title, &contactID, &folderPath, &createdAt, &updatedAt); err != nil {
 			rows.Close()
 			return fmt.Errorf("scanning thread: %w", err)
 		}
+		if code != nil {
+			t.Code = *code
+		}
+		if slug != nil {
+			t.Slug = *slug
+		}
 		if contactID != nil {
 			t.ContactID = *contactID
+		}
+		if folderPath != nil {
+			t.FolderPath = *folderPath
 		}
 		t.CreatedAt = createdAt.Format(time.RFC3339)
 		t.UpdatedAt = updatedAt.Format(time.RFC3339)

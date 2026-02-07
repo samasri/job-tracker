@@ -109,13 +109,16 @@ type CreateThreadMeetingInput struct {
 
 // CreateThreadMeeting creates a new meeting associated with a thread (no role/company)
 func (s *MeetingV2Service) CreateThreadMeeting(ctx context.Context, input CreateThreadMeetingInput) (*domain.MeetingV2, error) {
-	// Verify thread exists
+	// Verify thread exists and get its slug
 	thread, err := s.threadRepo.GetByID(ctx, input.ThreadID)
 	if err != nil {
 		return nil, fmt.Errorf("getting thread: %w", err)
 	}
 	if thread == nil {
 		return nil, fmt.Errorf("thread '%s' not found", input.ThreadID)
+	}
+	if thread.Slug == "" {
+		return nil, fmt.Errorf("thread '%s' has no slug (backfill required)", input.ThreadID)
 	}
 
 	// Parse occurred_at
@@ -130,8 +133,8 @@ func (s *MeetingV2Service) CreateThreadMeeting(ctx context.Context, input Create
 		return nil, err
 	}
 
-	// Create meeting note file
-	pathMD, err := s.fileStore.CreateThreadMeetingNote(ctx, input.ThreadID, input.OccurredAt, input.Title, meetingID)
+	// Create meeting note file using thread slug (flattened path)
+	pathMD, err := s.fileStore.CreateThreadMeetingNote(ctx, thread.Slug, input.OccurredAt, input.Title, meetingID)
 	if err != nil {
 		return nil, fmt.Errorf("creating thread meeting note: %w", err)
 	}

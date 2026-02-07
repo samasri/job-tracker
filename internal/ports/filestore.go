@@ -21,12 +21,15 @@ type FileStore interface {
 	CreateRoleMeetingNote(ctx context.Context, companySlug, roleSlug, occurredAt, title, meetingID string) (filePath string, err error)
 
 	// CreateThreadMeetingNote creates a meeting note file for a thread-only meeting (meetings_v2)
-	// Path: data/threads/<thread-id>/meetings/<YYYY-MM-DD>_<title>_<id>.md
-	CreateThreadMeetingNote(ctx context.Context, threadID, occurredAt, title, meetingID string) (filePath string, err error)
+	// Path: data/threads/<thread-slug>/<YYYY-MM-DD>_<title>_<id>.md (flattened, no /meetings subfolder)
+	CreateThreadMeetingNote(ctx context.Context, threadSlug, occurredAt, title, meetingID string) (filePath string, err error)
 
 	// SaveJobDescriptionHTML saves the HTML job description
 	SaveJobDescriptionHTML(ctx context.Context, companySlug, roleSlug string, content string) (filePath string, err error)
 
 	// SaveJobDescriptionPDF saves the PDF job description
 	SaveJobDescriptionPDF(ctx context.Context, companySlug, roleSlug string, content io.Reader) (filePath string, err error)
+
+	// ReadFile reads the content of a file at the given relative path
+	ReadFile(ctx context.Context, path string) (string, error)
 }

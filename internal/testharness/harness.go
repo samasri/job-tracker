@@ -91,7 +91,7 @@ func NewTestEnv(t *testing.T) *TestEnv {
 	// Create services
 	companyService := app.NewCompanyService(companyRepo, roleRepo, meetingRepo, fs)
 	contactService := app.NewContactService(contactRepo)
-	threadService := app.NewThreadService(threadRepo, meetingRepo, companyRepo, roleRepo)
+	threadService := app.NewThreadService(threadRepo, meetingRepo, companyRepo, roleRepo, contactRepo)
 	meetingService := app.NewMeetingService(meetingRepo, companyRepo, fs)
 	meetingV2Service := app.NewMeetingV2Service(meetingV2Repo, companyRepo, roleRepo, threadRepo, fs)
 	jdService := app.NewJDService(jdRepo, companyRepo, roleRepo, fs)

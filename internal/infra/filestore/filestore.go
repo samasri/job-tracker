@@ -131,21 +131,21 @@ occurred_at: %s
 }
 
 // CreateThreadMeetingNote creates a meeting note file for a thread-only meeting
-// Path: data/threads/<thread-id>/meetings/<YYYY-MM-DD>_<title>_<id>.md
-func (fs *FileStore) CreateThreadMeetingNote(ctx context.Context, threadID, occurredAt, title, meetingID string) (string, error) {
+// Path: data/threads/<thread-slug>/<YYYY-MM-DD>_<title>_<id>.md (flattened, no /meetings subfolder)
+func (fs *FileStore) CreateThreadMeetingNote(ctx context.Context, threadSlug, occurredAt, title, meetingID string) (string, error) {
 	// Format: YYYY-MM-DD_<title>_<id>.md
 	safeTitle := strings.ReplaceAll(title, " ", "-")
 	safeTitle = strings.ReplaceAll(safeTitle, "/", "-")
 	filename := fmt.Sprintf("%s_%s_%s.md", occurredAt[:10], safeTitle, meetingID)
 
-	// Create meetings folder under thread if it doesn't exist
-	meetingsDir := filepath.Join("data", "threads", threadID, "meetings")
-	absMeetingsDir := filepath.Join(fs.repoRoot, meetingsDir)
-	if err := os.MkdirAll(absMeetingsDir, 0755); err != nil {
-		return "", fmt.Errorf("creating thread meetings folder: %w", err)
+	// Create thread folder if it doesn't exist (flattened - no meetings subfolder)
+	threadDir := filepath.Join("data", "threads", threadSlug)
+	absThreadDir := filepath.Join(fs.repoRoot, threadDir)
+	if err := os.MkdirAll(absThreadDir, 0755); err != nil {
+		return "", fmt.Errorf("creating thread folder: %w", err)
 	}
 
-	filePath := filepath.Join(meetingsDir, filename)
+	filePath := filepath.Join(threadDir, filename)
 	absPath := filepath.Join(fs.repoRoot, filePath)
 
 	content := fmt.Sprintf(`# %s
@@ -192,4 +192,16 @@ func (fs *FileStore) SaveJobDescriptionPDF(ctx context.Context, companySlug, rol
 	}
 
 	return filePath, nil
+}
+
+// ReadFile reads the content of a file at the given relative path
+func (fs *FileStore) ReadFile(ctx context.Context, path string) (string, error) {
+	absPath := filepath.Join(fs.repoRoot, path)
+
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		return "", fmt.Errorf("reading file: %w", err)
+	}
+
+	return string(content), nil
 }

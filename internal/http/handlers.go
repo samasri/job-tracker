@@ -103,9 +103,12 @@ type ContactResponse struct {
 
 // ThreadResponse is the response for a thread
 type ThreadResponse struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	ContactID string `json:"contact_id,omitempty"`
+	ID         string `json:"id"`
+	Code       string `json:"code,omitempty"`
+	Slug       string `json:"slug,omitempty"`
+	Title      string `json:"title"`
+	ContactID  string `json:"contact_id,omitempty"`
+	FolderPath string `json:"folder_path,omitempty"`
 }
 
 // CompanyWithDetailsResponse is the response for a company with roles and meetings
@@ -411,9 +414,12 @@ func (h *Handlers) HandleCreateThread() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(ThreadResponse{
-			ID:        thread.ID,
-			Title:     thread.Title,
-			ContactID: thread.ContactID,
+			ID:         thread.ID,
+			Code:       thread.Code,
+			Slug:       thread.Slug,
+			Title:      thread.Title,
+			ContactID:  thread.ContactID,
+			FolderPath: thread.FolderPath,
 		})
 	}
 }
@@ -1392,6 +1398,116 @@ func (h *Handlers) HandleAttachJDForm() http.HandlerFunc {
 		}
 
 		http.Redirect(w, r, redirectURL+"?success=Job+description+attached", http.StatusSeeOther)
+	}
+}
+
+// HandleViewJD handles GET /companies/{companySlug}/roles/{roleSlug}/jd (JD viewer page)
+func (h *Handlers) HandleViewJD() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		companySlug := chi.URLParam(r, "companySlug")
+		roleSlug := chi.URLParam(r, "roleSlug")
+
+		company, err := h.companyService.GetCompany(r.Context(), companySlug)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if company == nil {
+			http.Error(w, "company not found", http.StatusNotFound)
+			return
+		}
+
+		// Find the role
+		var role *domain.Role
+		for _, r := range company.Roles {
+			if r.Slug == roleSlug {
+				role = r
+				break
+			}
+		}
+		if role == nil {
+			http.Error(w, "role not found", http.StatusNotFound)
+			return
+		}
+
+		// Get JD
+		jd, err := h.jdService.GetJobDescription(r.Context(), role.ID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if jd == nil || jd.PathHTML == "" {
+			http.Error(w, "no job description HTML attached to this role", http.StatusNotFound)
+			return
+		}
+
+		data := map[string]interface{}{
+			"Title":   role.Title + " - Job Description",
+			"Company": company.Company,
+			"Role":    role,
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := h.views.Render(w, "jd_viewer", data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}
+}
+
+// HandleViewJDRaw handles GET /companies/{companySlug}/roles/{roleSlug}/jd/raw (raw HTML with CSP)
+func (h *Handlers) HandleViewJDRaw() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		companySlug := chi.URLParam(r, "companySlug")
+		roleSlug := chi.URLParam(r, "roleSlug")
+
+		company, err := h.companyService.GetCompany(r.Context(), companySlug)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if company == nil {
+			http.Error(w, "company not found", http.StatusNotFound)
+			return
+		}
+
+		// Find the role
+		var role *domain.Role
+		for _, r := range company.Roles {
+			if r.Slug == roleSlug {
+				role = r
+				break
+			}
+		}
+		if role == nil {
+			http.Error(w, "role not found", http.StatusNotFound)
+			return
+		}
+
+		// Get JD
+		jd, err := h.jdService.GetJobDescription(r.Context(), role.ID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if jd == nil || jd.PathHTML == "" {
+			http.Error(w, "no job description HTML attached to this role", http.StatusNotFound)
+			return
+		}
+
+		// Read the HTML file
+		htmlContent, err := h.jdService.ReadJobDescriptionHTML(r.Context(), jd.PathHTML)
+		if err != nil {
+			http.Error(w, "failed to read job description: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Set strict security headers
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// Strict CSP that blocks scripts and external resources
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'")
+
+		w.Write([]byte(htmlContent))
 	}
 }
 

@@ -33,9 +33,14 @@ type ContactRepository interface {
 type ThreadRepository interface {
 	Create(ctx context.Context, thread *domain.Thread) error
 	GetByID(ctx context.Context, id string) (*domain.Thread, error)
+	GetBySlug(ctx context.Context, slug string) (*domain.Thread, error)
 	List(ctx context.Context) ([]*domain.Thread, error)
 	LinkRole(ctx context.Context, threadID, roleID string) error
 	GetLinkedRoles(ctx context.Context, threadID string) ([]*domain.Role, error)
+	// UpdateCodeSlug updates the code, slug, and folder_path for a thread (used for backfill)
+	UpdateCodeSlug(ctx context.Context, threadID, code, slug, folderPath string) error
+	// CodeExists checks if a code already exists (for collision detection)
+	CodeExists(ctx context.Context, code string) (bool, error)
 }
 
 // MeetingRepository defines operations for meeting persistence

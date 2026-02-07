@@ -31,14 +31,16 @@ job-hunter-v2/
 │   │   ├── company_service.go   # Company + Role operations
 │   │   ├── contact_service.go   # Contact operations
 │   │   ├── thread_service.go    # Thread + role linking
-│   │   ├── meeting_service.go   # Meeting operations
+│   │   ├── meeting_service.go   # Legacy meeting operations (deprecated)
+│   │   ├── meeting_v2_service.go # Role/Thread meeting operations
 │   │   ├── jd_service.go        # Job description attachment
 │   │   └── export_service.go    # JSON export
 │   ├── config/
 │   │   └── config.go            # Environment-based configuration
 │   ├── domain/
 │   │   ├── types.go             # Domain entities and RoleStatus enum
-│   │   └── shortid.go           # 8-char ID generator (Crockford Base32)
+│   │   ├── shortid.go           # 8-char ID generator (Crockford Base32)
+│   │   └── slug.go              # Slugify helpers and thread folder path generation
 │   ├── http/
 │   │   ├── router.go            # Chi router setup, route definitions
 │   │   ├── handlers.go          # HTTP handlers (API + HTML forms)
@@ -50,7 +52,8 @@ job-hunter-v2/
 │   │       ├── company.html     # Company detail page
 │   │       ├── threads.html     # Thread list page
 │   │       ├── thread.html      # Thread detail page
-│   │       └── role.html        # Role detail page
+│   │       ├── role.html        # Role detail page
+│   │       └── jd_viewer.html   # JD viewer page (sandboxed iframe)
 │   ├── infra/
 │   │   ├── filestore/
 │   │   │   └── filestore.go     # Filesystem operations (implements ports.FileStore)
@@ -60,30 +63,36 @@ job-hunter-v2/
 │   │       ├── role_repo.go     # RoleRepository implementation
 │   │       ├── contact_repo.go  # ContactRepository implementation
 │   │       ├── thread_repo.go   # ThreadRepository implementation
-│   │       ├── meeting_repo.go  # MeetingRepository implementation
+│   │       ├── meeting_repo.go  # Legacy MeetingRepository (deprecated)
+│   │       ├── meeting_v2_repo.go # MeetingV2Repository implementation
 │   │       ├── jd_repo.go       # JobDescriptionRepository implementation
 │   │       └── migrations/
 │   │           ├── 001_initial.go                    # companies, roles
 │   │           ├── 002_contacts_threads_meetings.go  # contacts, threads, meetings, meeting_threads
 │   │           ├── 003_thread_roles.go               # thread_roles join table
 │   │           ├── 004_job_descriptions.go           # role_job_descriptions
-│   │           └── 005_role_status.go                # role status column
+│   │           ├── 005_role_status.go                # role status column
+│   │           ├── 006_meetings_v2.go                # meetings_v2 with XOR constraint
+│   │           └── 007_thread_code_slug.go           # thread code, slug, folder_path columns
 │   ├── ports/
 │   │   ├── repositories.go      # Repository interfaces
 │   │   └── filestore.go         # FileStore interface
 │   └── testharness/
 │       └── harness.go           # Test utilities (temp DB, temp repo, HTTP client)
 ├── data/                        # Filesystem storage (gitignored except structure)
-│   └── companies/
-│       └── {company-slug}/
-│           ├── company.md       # Company notes (status computed from roles)
-│           ├── roles/
-│           │   └── {role-slug}/
-│           │       ├── job.html # Job description HTML
-│           │       └── job.pdf  # Job description PDF
-│           ├── meetings/
-│           │   └── YYYY-MM-DD_title_<8-char-id>.md
-│           └── resumes/
+│   ├── companies/
+│   │   └── {company-slug}/
+│   │       ├── company.md       # Company notes (status computed from roles)
+│   │       ├── roles/
+│   │       │   └── {role-slug}/
+│   │       │       ├── job.html # Job description HTML
+│   │       │       ├── job.pdf  # Job description PDF
+│   │       │       └── meetings/
+│   │       │           └── YYYY-MM-DD_title_<8-char-id>.md  # Role meetings
+│   │       └── resumes/
+│   └── threads/
+│       └── {contact-slug}-{THREADCODE8}/    # e.g., john-smith-6PPEZJPW (or thread-6PPEZJPW if no contact)
+│           └── YYYY-MM-DD_title_<8-char-id>.md  # Thread meetings (flattened, no /meetings subfolder)
 └── db/
     ├── index.sqlite             # SQLite database
     └── export.json              # Deterministic export
@@ -180,19 +189,34 @@ type Contact struct {
 
 // Thread represents a conversation/relationship container
 type Thread struct {
-    ID        string
-    Title     string
-    ContactID string    // Optional, may be empty
-    CreatedAt time.Time
-    UpdatedAt time.Time
+    ID         string
+    Code       string    // 8-char unique code (e.g., "6PPEZJPW")
+    Slug       string    // Folder slug: "<contact-slug>-<code>" or "thread-<code>"
+    Title      string
+    ContactID  string    // Optional, may be empty
+    FolderPath string    // Relative path to thread folder (e.g., "data/threads/john-smith-6PPEZJPW")
+    CreatedAt  time.Time
+    UpdatedAt  time.Time
 }
 
-// Meeting represents a meeting or conversation
+// Meeting represents a meeting (DEPRECATED - use MeetingV2)
 type Meeting struct {
     ID         string
     OccurredAt time.Time
     Title      string
     CompanyID  string
+    PathMD     string    // Relative path to markdown file
+    CreatedAt  time.Time
+    UpdatedAt  time.Time
+}
+
+// MeetingV2 represents a meeting tied to either a Role OR a Thread (XOR)
+type MeetingV2 struct {
+    ID         string
+    OccurredAt time.Time
+    Title      string
+    RoleID     string    // Set for role meetings, empty for thread-only meetings
+    ThreadID   string    // Set for thread-only meetings, empty for role meetings
     PathMD     string    // Relative path to markdown file
     CreatedAt  time.Time
     UpdatedAt  time.Time
@@ -250,8 +274,11 @@ erDiagram
 
     threads {
         TEXT id PK
+        TEXT code UK
+        TEXT slug UK
         TEXT title
         TEXT contact_id FK
+        TEXT folder_path
         DATETIME created_at
         DATETIME updated_at
     }
@@ -306,7 +333,8 @@ The following tables exist but are no longer used by application code:
 | Notes, artifacts | Filesystem (`data/`) | Human-readable, easy to edit, git-friendly |
 | Company status | `company.md` frontmatter | Manual editing, visible in UI |
 | Job descriptions | `job.html`, `job.pdf` | Preserve formatting |
-| Meeting notes | `YYYY-MM-DD_title_<8-char-id>.md` | Chronological, editable, compact IDs |
+| Role meeting notes | `data/companies/{slug}/roles/{role}/meetings/YYYY-MM-DD_title_<id>.md` | Chronological, grouped by role |
+| Thread meeting notes | `data/threads/{thread-slug}/YYYY-MM-DD_title_<id>.md` | Flattened, grouped by thread |
 
 ## Configuration
 
@@ -327,13 +355,14 @@ Environment variables (all optional):
 | GET | `/health` | Health check |
 | POST | `/api/companies` | Create company |
 | GET | `/api/companies` | List companies |
-| GET | `/api/companies/{slug}` | Get company with roles/meetings |
+| GET | `/api/companies/{slug}` | Get company with roles |
 | POST | `/api/companies/{slug}/roles` | Create role |
+| POST | `/api/companies/{companySlug}/roles/{roleSlug}/meetings` | Create role meeting |
 | POST | `/api/contacts` | Create contact |
 | POST | `/api/threads` | Create thread |
 | GET | `/api/threads/{id}` | Get thread with linked roles/meetings |
 | POST | `/api/threads/{id}/roles` | Link role to thread |
-| POST | `/api/meetings` | Create meeting |
+| POST | `/api/threads/{id}/meetings` | Create thread meeting |
 | POST | `/api/roles/{companySlug}/{roleSlug}/jd` | Attach JD (multipart) |
 | POST | `/api/export` | Export to `db/export.json` |
 
@@ -343,17 +372,19 @@ Environment variables (all optional):
 | -------- | ------ | ------------- |
 | GET | `/companies` | Company list + Add Company form |
 | POST | `/companies/new` | Create company (form) |
-| GET | `/companies/{slug}` | Company detail + Add Role/Meeting forms |
+| GET | `/companies/{slug}` | Company detail + Add Role form |
 | POST | `/companies/{slug}/roles/new` | Create role (form) |
-| POST | `/companies/{slug}/meetings/new` | Create meeting (form) |
-| GET | `/companies/{companySlug}/roles/{roleSlug}` | Role detail + Attach JD form |
+| GET | `/companies/{companySlug}/roles/{roleSlug}` | Role detail + Meetings + Attach JD form |
 | POST | `/companies/{companySlug}/roles/{roleSlug}/jd` | Attach JD (multipart form) |
+| GET | `/companies/{companySlug}/roles/{roleSlug}/jd` | JD viewer page (sandboxed iframe) |
+| GET | `/companies/{companySlug}/roles/{roleSlug}/jd/raw` | Raw JD HTML with strict CSP headers |
+| POST | `/companies/{companySlug}/roles/{roleSlug}/meetings/new` | Create role meeting (form) |
 | GET | `/threads` | Thread list + Add Contact/Thread forms |
 | POST | `/threads/new` | Create thread (form) |
 | POST | `/contacts/new` | Create contact (form) |
-| GET | `/threads/{id}` | Thread detail + Link Role/Meeting forms |
+| GET | `/threads/{id}` | Thread detail + Link Role + Thread Meetings + Role Meetings |
 | POST | `/threads/{id}/roles/link` | Link role to thread (form) |
-| POST | `/threads/{id}/meetings/new` | Create meeting from thread (form) |
+| POST | `/threads/{id}/meetings/v2/new` | Create thread meeting (form) |
 | POST | `/export` | Export and redirect with success message |
 
 ## Design Values & Non-Negotiables
@@ -377,6 +408,10 @@ Environment variables (all optional):
 1. **Local-only by default**: Binds to `127.0.0.1`, not `0.0.0.0`
 2. **No authentication**: Designed for personal local use
 3. **No external dependencies at runtime**: SQLite embedded, no external services
+4. **JD viewer security**: Job descriptions are displayed in a sandboxed iframe with strict CSP headers:
+   - `sandbox="allow-same-origin"` on iframe (blocks scripts, forms, popups)
+   - CSP: `default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`
+   - Only serves JD files linked in the database (not arbitrary filesystem access)
 
 ### Testing
 
@@ -445,3 +480,4 @@ go test ./internal/http -run TestUI_CreateCompanyViaForm -v
 # Access from other devices
 JOBTRACKER_ADDR=0.0.0.0:8080 go run ./cmd/server
 ```
+

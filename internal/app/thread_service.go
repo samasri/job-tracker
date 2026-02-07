@@ -16,6 +16,7 @@ type ThreadService struct {
 	meetingRepo ports.MeetingRepository
 	companyRepo ports.CompanyRepository
 	roleRepo    ports.RoleRepository
+	contactRepo ports.ContactRepository
 }
 
 // NewThreadService creates a new ThreadService
@@ -24,12 +25,14 @@ func NewThreadService(
 	meetingRepo ports.MeetingRepository,
 	companyRepo ports.CompanyRepository,
 	roleRepo ports.RoleRepository,
+	contactRepo ports.ContactRepository,
 ) *ThreadService {
 	return &ThreadService{
 		threadRepo:  threadRepo,
 		meetingRepo: meetingRepo,
 		companyRepo: companyRepo,
 		roleRepo:    roleRepo,
+		contactRepo: contactRepo,
 	}
 }
 
@@ -41,10 +44,49 @@ type CreateThreadInput struct {
 
 // CreateThread creates a new thread
 func (s *ThreadService) CreateThread(ctx context.Context, input CreateThreadInput) (*domain.Thread, error) {
+	// Generate unique code with retry on collision
+	var code string
+	for i := 0; i < 10; i++ {
+		var err error
+		code, err = domain.NewShortID8()
+		if err != nil {
+			return nil, fmt.Errorf("generating thread code: %w", err)
+		}
+		exists, err := s.threadRepo.CodeExists(ctx, code)
+		if err != nil {
+			return nil, fmt.Errorf("checking code existence: %w", err)
+		}
+		if !exists {
+			break
+		}
+		if i == 9 {
+			return nil, fmt.Errorf("failed to generate unique code after 10 attempts")
+		}
+	}
+
+	// Get contact name if contact is specified
+	var contactName string
+	if input.ContactID != "" {
+		contact, err := s.contactRepo.GetByID(ctx, input.ContactID)
+		if err != nil {
+			return nil, fmt.Errorf("getting contact: %w", err)
+		}
+		if contact != nil {
+			contactName = contact.Name
+		}
+	}
+
+	// Generate slug and folder path
+	slug := domain.GenerateThreadSlug(contactName, code)
+	folderPath := domain.ThreadFolderPath(slug)
+
 	thread := &domain.Thread{
-		ID:        uuid.New().String(),
-		Title:     input.Title,
-		ContactID: input.ContactID,
+		ID:         uuid.New().String(),
+		Code:       code,
+		Slug:       slug,
+		Title:      input.Title,
+		ContactID:  input.ContactID,
+		FolderPath: folderPath,
 	}
 
 	if err := s.threadRepo.Create(ctx, thread); err != nil {
@@ -116,6 +158,62 @@ type LinkRoleInput struct {
 	ThreadID    string
 	CompanySlug string
 	RoleSlug    string
+}
+
+// BackfillThreadCodes generates code/slug/folder_path for threads that are missing them
+func (s *ThreadService) BackfillThreadCodes(ctx context.Context) error {
+	threads, err := s.threadRepo.List(ctx)
+	if err != nil {
+		return fmt.Errorf("listing threads: %w", err)
+	}
+
+	for _, thread := range threads {
+		if thread.Code != "" {
+			continue // Already has a code
+		}
+
+		// Generate unique code with retry on collision
+		var code string
+		for i := 0; i < 10; i++ {
+			code, err = domain.NewShortID8()
+			if err != nil {
+				return fmt.Errorf("generating thread code: %w", err)
+			}
+			exists, err := s.threadRepo.CodeExists(ctx, code)
+			if err != nil {
+				return fmt.Errorf("checking code existence: %w", err)
+			}
+			if !exists {
+				break
+			}
+			if i == 9 {
+				return fmt.Errorf("failed to generate unique code after 10 attempts")
+			}
+		}
+
+		// Get contact name if contact is specified
+		var contactName string
+		if thread.ContactID != "" {
+			contact, err := s.contactRepo.GetByID(ctx, thread.ContactID)
+			if err != nil {
+				return fmt.Errorf("getting contact: %w", err)
+			}
+			if contact != nil {
+				contactName = contact.Name
+			}
+		}
+
+		// Generate slug and folder path
+		slug := domain.GenerateThreadSlug(contactName, code)
+		folderPath := domain.ThreadFolderPath(slug)
+
+		// Update thread
+		if err := s.threadRepo.UpdateCodeSlug(ctx, thread.ID, code, slug, folderPath); err != nil {
+			return fmt.Errorf("updating thread %s: %w", thread.ID, err)
+		}
+	}
+
+	return nil
 }
 
 // LinkRole links a role to a thread (idempotent)

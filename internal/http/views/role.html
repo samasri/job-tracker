@@ -35,7 +35,10 @@
 {{if or .JD.PathHTML .JD.PathPDF}}
 <div class="card">
     {{if .JD.PathHTML}}
-    <p><strong>HTML:</strong> <span class="path-display">{{.JD.PathHTML}}</span></p>
+    <p>
+        <strong>HTML:</strong> <span class="path-display">{{.JD.PathHTML}}</span>
+        <a href="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/jd" class="button button-small">View JD</a>
+    </p>
     {{end}}
     {{if .JD.PathPDF}}
     <p><strong>PDF:</strong> <span class="path-display">{{.JD.PathPDF}}</span></p>

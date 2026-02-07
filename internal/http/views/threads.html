@@ -14,7 +14,10 @@
         <tbody>
             {{range .Threads}}
             <tr>
-                <td><a href="/threads/{{.Thread.ID}}">{{.Thread.Title}}</a></td>
+                <td>
+                    <a href="/threads/{{.Thread.ID}}">{{.Thread.Title}}</a>
+                    {{if .Thread.Slug}}<br><small class="path-display">{{.Thread.Slug}}</small>{{end}}
+                </td>
                 <td>
                     {{if .Contact}}
                     {{.Contact.Name}}{{if .Contact.Org}} ({{.Contact.Org}}){{end}}

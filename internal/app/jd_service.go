@@ -88,7 +88,7 @@ func (s *JDService) AttachJD(ctx context.Context, input AttachJDInput) (*domain.
 	return jd, nil
 }
 
-// GetJD retrieves a job description for a role
+// GetJD retrieves a job description for a role by company and role slugs
 func (s *JDService) GetJD(ctx context.Context, companySlug, roleSlug string) (*domain.RoleJobDescription, error) {
 	// Get company
 	company, err := s.companyRepo.GetBySlug(ctx, companySlug)
@@ -109,4 +109,14 @@ func (s *JDService) GetJD(ctx context.Context, companySlug, roleSlug string) (*d
 	}
 
 	return s.jdRepo.GetByRoleID(ctx, role.ID)
+}
+
+// GetJobDescription retrieves a job description by role ID
+func (s *JDService) GetJobDescription(ctx context.Context, roleID string) (*domain.RoleJobDescription, error) {
+	return s.jdRepo.GetByRoleID(ctx, roleID)
+}
+
+// ReadJobDescriptionHTML reads the HTML content from a JD file
+func (s *JDService) ReadJobDescriptionHTML(ctx context.Context, pathHTML string) (string, error) {
+	return s.fileStore.ReadFile(ctx, pathHTML)
 }

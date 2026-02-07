@@ -81,6 +81,8 @@ func (s *Server) routes() {
 	s.router.Get("/companies/{companySlug}/roles/{roleSlug}", s.handlers.HandleRolePage())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/status", s.handlers.HandleUpdateRoleStatusForm())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/jd", s.handlers.HandleAttachJDForm())
+	s.router.Get("/companies/{companySlug}/roles/{roleSlug}/jd", s.handlers.HandleViewJD())
+	s.router.Get("/companies/{companySlug}/roles/{roleSlug}/jd/raw", s.handlers.HandleViewJDRaw())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/meetings/new", s.handlers.HandleCreateRoleMeetingV2Form())
 	s.router.Get("/threads", s.handlers.HandleThreadsPage())
 	s.router.Post("/threads/new", s.handlers.HandleCreateThreadForm())
