@@ -6,7 +6,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+)
+
+var (
+	// slugRegexp matches non-alphanumeric characters
+	slugRegexp = regexp.MustCompile(`[^a-z0-9]+`)
+	// multiDashRegexp matches multiple consecutive dashes
+	multiDashRegexp = regexp.MustCompile(`-+`)
 )
 
 // FileStore implements ports.FileStore using the local filesystem
@@ -248,4 +256,74 @@ func (fs *FileStore) SaveRoleResumePDF(ctx context.Context, companySlug, roleSlu
 	}
 
 	return filePath, nil
+}
+
+// slugify converts a string to a filesystem-safe slug
+func slugify(s string) string {
+	result := strings.ToLower(s)
+	result = slugRegexp.ReplaceAllString(result, "-")
+	result = multiDashRegexp.ReplaceAllString(result, "-")
+	result = strings.Trim(result, "-")
+	return result
+}
+
+// extensionForType returns the file extension for an artifact type
+func extensionForType(artifactType string) string {
+	switch artifactType {
+	case "pdf":
+		return ".pdf"
+	case "jsonc":
+		return ".jsonc"
+	case "text":
+		return ".txt"
+	default:
+		return ".txt"
+	}
+}
+
+// SaveRoleArtifact saves an artifact file for a role
+func (fs *FileStore) SaveRoleArtifact(ctx context.Context, companySlug, roleSlug, artifactName, artifactType string, content io.Reader) (string, error) {
+	// Create artifacts folder if it doesn't exist
+	artifactsDir := filepath.Join("data", "companies", companySlug, "roles", roleSlug, "artifacts")
+	absArtifactsDir := filepath.Join(fs.repoRoot, artifactsDir)
+	if err := os.MkdirAll(absArtifactsDir, 0755); err != nil {
+		return "", fmt.Errorf("creating artifacts folder: %w", err)
+	}
+
+	// Generate filename from slugified name + extension
+	filename := slugify(artifactName) + extensionForType(artifactType)
+	filePath := filepath.Join(artifactsDir, filename)
+	absPath := filepath.Join(fs.repoRoot, filePath)
+
+	f, err := os.Create(absPath)
+	if err != nil {
+		return "", fmt.Errorf("creating artifact file: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, content); err != nil {
+		return "", fmt.Errorf("writing artifact file: %w", err)
+	}
+
+	return filePath, nil
+}
+
+// ReadFileBytes reads the raw bytes of a file at the given relative path
+func (fs *FileStore) ReadFileBytes(ctx context.Context, path string) ([]byte, error) {
+	absPath := filepath.Join(fs.repoRoot, path)
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading file: %w", err)
+	}
+	return content, nil
+}
+
+// DeleteFile deletes a file at the given relative path
+func (fs *FileStore) DeleteFile(ctx context.Context, path string) error {
+	absPath := filepath.Join(fs.repoRoot, path)
+	err := os.Remove(absPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("deleting file: %w", err)
+	}
+	return nil
 }

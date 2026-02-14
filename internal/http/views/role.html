@@ -31,72 +31,88 @@
     </form>
 </div>
 
-<h2>Job Description</h2>
-{{if or .JD.PathHTML .JD.PathPDF}}
+<h2>Artifacts</h2>
+{{if .Artifacts}}
 <div class="card">
-    {{if .JD.PathHTML}}
-    <p>
-        <strong>HTML:</strong> <span class="path-display">{{.JD.PathHTML}}</span>
-        <a href="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/jd" class="button button-small">View JD</a>
-    </p>
-    {{end}}
-    {{if .JD.PathPDF}}
-    <p><strong>PDF:</strong> <span class="path-display">{{.JD.PathPDF}}</span></p>
-    {{end}}
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr>
+                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Name</th>
+                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Type</th>
+                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Path</th>
+                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Updated</th>
+                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Artifacts}}
+            <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">{{.Name}}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">{{.Type}}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;"><span class="path-display">{{.Path}}</span></td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">{{.UpdatedAt.Format "Jan 02, 2006"}}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                    <a href="/companies/{{$.Company.Slug}}/roles/{{$.Role.Slug}}/artifacts/{{.Name}}" class="button button-small">View</a>
+                    <form action="/companies/{{$.Company.Slug}}/roles/{{$.Role.Slug}}/artifacts/{{.Name}}/delete" method="POST" style="display: inline;" onsubmit="return confirm('Delete artifact {{.Name}}?');">
+                        <button type="submit" class="button button-small button-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
 </div>
 {{else}}
 <div class="card">
-    <p>No job description attached yet. Add one below.</p>
+    <p>No artifacts yet. Add one below.</p>
 </div>
 {{end}}
 
 <div class="form-section">
-    <h3>Attach Job Description</h3>
-    <form action="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/jd" method="POST" enctype="multipart/form-data">
-        <div class="form-group">
-            <label for="html">HTML Content</label>
-            <textarea id="html" name="html" placeholder="Paste job description HTML here..."></textarea>
-            <small>You can paste raw HTML or plain text (will be wrapped in HTML)</small>
+    <h3>Add/Update Artifact</h3>
+    <form action="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/artifacts" method="POST" enctype="multipart/form-data" id="artifactForm">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="artifact_name">Name</label>
+                <input type="text" id="artifact_name" name="name" required placeholder="e.g., resume, job-description">
+                <small>Unique name for this artifact. Same name will overwrite.</small>
+            </div>
+            <div class="form-group">
+                <label for="artifact_type">Type</label>
+                <select id="artifact_type" name="type" onchange="toggleArtifactInputs()">
+                    <option value="text">Text</option>
+                    <option value="html">HTML</option>
+                    <option value="jsonc">JSONC (JSON with comments)</option>
+                    <option value="pdf">PDF</option>
+                </select>
+            </div>
         </div>
-        <div class="form-group">
-            <label for="pdf">PDF File (optional)</label>
-            <input type="file" id="pdf" name="pdf" accept=".pdf">
+        <div class="form-group" id="artifact_text_group">
+            <label for="artifact_content">Content</label>
+            <textarea id="artifact_content" name="content" placeholder="Enter text or JSONC content..."></textarea>
         </div>
-        <button type="submit">Attach JD</button>
+        <div class="form-group" id="artifact_file_group" style="display: none;">
+            <label for="artifact_file">PDF File</label>
+            <input type="file" id="artifact_file" name="file" accept=".pdf">
+        </div>
+        <button type="submit">Save Artifact</button>
     </form>
 </div>
 
-<h2>Resume</h2>
-{{if or .Resume.PathJSON .Resume.PathPDF}}
-<div class="card">
-    {{if .Resume.PathJSON}}
-    <p><strong>JSON:</strong> <span class="path-display">{{.Resume.PathJSON}}</span></p>
-    {{end}}
-    {{if .Resume.PathPDF}}
-    <p><strong>PDF:</strong> <span class="path-display">{{.Resume.PathPDF}}</span></p>
-    {{end}}
-</div>
-{{else}}
-<div class="card">
-    <p>No resume attached yet. Add one below.</p>
-</div>
-{{end}}
-
-<div class="form-section">
-    <h3>Attach Resume</h3>
-    <form action="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/resume" method="POST" enctype="multipart/form-data">
-        <div class="form-group">
-            <label for="resume_json">Resume JSON</label>
-            <textarea id="resume_json" name="resume_json" placeholder="Paste resume-data JSON here..."></textarea>
-            <small>Paste the resume-data JSON used by the resume generator.</small>
-        </div>
-        <div class="form-group">
-            <label for="resume_pdf">Resume PDF File (optional)</label>
-            <input type="file" id="resume_pdf" name="pdf" accept=".pdf">
-        </div>
-        <button type="submit">Attach Resume</button>
-    </form>
-</div>
+<script>
+function toggleArtifactInputs() {
+    var type = document.getElementById('artifact_type').value;
+    var textGroup = document.getElementById('artifact_text_group');
+    var fileGroup = document.getElementById('artifact_file_group');
+    if (type === 'pdf') {
+        textGroup.style.display = 'none';
+        fileGroup.style.display = 'block';
+    } else {
+        textGroup.style.display = 'block';
+        fileGroup.style.display = 'none';
+    }
+}
+</script>
 
 <h2>Meetings</h2>
 {{if .Meetings}}

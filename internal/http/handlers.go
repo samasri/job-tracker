@@ -24,6 +24,7 @@ type Handlers struct {
 	meetingV2Service *app.MeetingV2Service
 	jdService        *app.JDService
 	resumeService    *app.ResumeService
+	artifactService  *app.ArtifactService
 	exportService    *app.ExportService
 	views            *views.Views
 }
@@ -37,6 +38,7 @@ func NewHandlers(
 	meetingV2Service *app.MeetingV2Service,
 	jdService *app.JDService,
 	resumeService *app.ResumeService,
+	artifactService *app.ArtifactService,
 	exportService *app.ExportService,
 ) *Handlers {
 	v, err := views.New()
@@ -52,6 +54,7 @@ func NewHandlers(
 		meetingV2Service: meetingV2Service,
 		jdService:        jdService,
 		resumeService:    resumeService,
+		artifactService:  artifactService,
 		exportService:    exportService,
 		views:            v,
 	}
@@ -1325,6 +1328,9 @@ func (h *Handlers) HandleRolePage() http.HandlerFunc {
 			resumeData.PathPDF = resume.PathPDF
 		}
 
+		// Get artifacts
+		artifacts, _ := h.artifactService.ListArtifacts(r.Context(), companySlug, roleSlug)
+
 		// Check for success/error query params
 		successMsg := r.URL.Query().Get("success")
 		errorMsg := r.URL.Query().Get("error")
@@ -1350,6 +1356,7 @@ func (h *Handlers) HandleRolePage() http.HandlerFunc {
 			"Role":        role,
 			"JD":          jdData,
 			"Resume":      resumeData,
+			"Artifacts":   artifacts,
 			"AllStatuses": allStatuses,
 			"Meetings":    meetings,
 			"Success":     successMsg,
@@ -1763,5 +1770,134 @@ func (h *Handlers) HandleCreateThreadMeetingV2Form() http.HandlerFunc {
 		}
 
 		http.Redirect(w, r, redirectURL+"?success=Meeting+created", http.StatusSeeOther)
+	}
+}
+
+// --- Artifact Handlers ---
+
+// HandleUpsertArtifactForm handles POST /companies/{companySlug}/roles/{roleSlug}/artifacts (HTML form)
+func (h *Handlers) HandleUpsertArtifactForm() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		companySlug := chi.URLParam(r, "companySlug")
+		roleSlug := chi.URLParam(r, "roleSlug")
+		redirectURL := "/companies/" + companySlug + "/roles/" + roleSlug
+
+		// Parse multipart form (max 20MB)
+		if err := r.ParseMultipartForm(20 << 20); err != nil {
+			http.Redirect(w, r, redirectURL+"?error=Failed+to+parse+form", http.StatusSeeOther)
+			return
+		}
+
+		name := r.FormValue("name")
+		artifactType := r.FormValue("type")
+		textContent := r.FormValue("content")
+
+		if name == "" {
+			http.Redirect(w, r, redirectURL+"?error=Artifact+name+is+required", http.StatusSeeOther)
+			return
+		}
+
+		input := app.UpsertArtifactInput{
+			CompanySlug: companySlug,
+			RoleSlug:    roleSlug,
+			Name:        name,
+			Type:        artifactType,
+		}
+
+		// Handle content based on type
+		switch artifactType {
+		case "pdf":
+			// Get PDF file
+			pdfFile, _, err := r.FormFile("file")
+			if err != nil {
+				http.Redirect(w, r, redirectURL+"?error=PDF+file+is+required+for+PDF+artifacts", http.StatusSeeOther)
+				return
+			}
+			defer pdfFile.Close()
+			input.FileContent = pdfFile
+		case "text", "jsonc":
+			if textContent == "" {
+				http.Redirect(w, r, redirectURL+"?error=Content+is+required+for+"+artifactType+"+artifacts", http.StatusSeeOther)
+				return
+			}
+			input.TextContent = textContent
+		default:
+			http.Redirect(w, r, redirectURL+"?error=Invalid+artifact+type", http.StatusSeeOther)
+			return
+		}
+
+		_, err := h.artifactService.UpsertArtifact(r.Context(), input)
+		if err != nil {
+			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
+		}
+
+		http.Redirect(w, r, redirectURL+"?success=Artifact+saved", http.StatusSeeOther)
+	}
+}
+
+// HandleViewArtifact handles GET /companies/{companySlug}/roles/{roleSlug}/artifacts/{name}
+func (h *Handlers) HandleViewArtifact() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		companySlug := chi.URLParam(r, "companySlug")
+		roleSlug := chi.URLParam(r, "roleSlug")
+		name := chi.URLParam(r, "name")
+
+		// Get artifact by name
+		artifact, err := h.artifactService.GetArtifactByName(r.Context(), companySlug, roleSlug, name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if artifact == nil {
+			http.Error(w, "artifact not found", http.StatusNotFound)
+			return
+		}
+
+		// Read artifact content
+		content, err := h.artifactService.ReadArtifactContent(r.Context(), artifact.Path)
+		if err != nil {
+			http.Error(w, "failed to read artifact: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Set security headers
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+
+		// Serve based on type
+		switch artifact.Type {
+		case "pdf":
+			w.Header().Set("Content-Type", "application/pdf")
+			w.Header().Set("Content-Disposition", "inline; filename=\""+name+".pdf\"")
+		case "jsonc":
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+		case "text":
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+		case "html":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+		}
+
+		w.Write(content)
+	}
+}
+
+// HandleDeleteArtifact handles POST /companies/{companySlug}/roles/{roleSlug}/artifacts/{name}/delete
+func (h *Handlers) HandleDeleteArtifact() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		companySlug := chi.URLParam(r, "companySlug")
+		roleSlug := chi.URLParam(r, "roleSlug")
+		name := chi.URLParam(r, "name")
+		redirectURL := "/companies/" + companySlug + "/roles/" + roleSlug
+
+		err := h.artifactService.DeleteArtifact(r.Context(), companySlug, roleSlug, name)
+		if err != nil {
+			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
+		}
+
+		http.Redirect(w, r, redirectURL+"?success=Artifact+deleted", http.StatusSeeOther)
 	}
 }

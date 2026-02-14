@@ -76,3 +76,17 @@ type ResumeRepository interface {
 	Save(ctx context.Context, resume *domain.RoleResume) error
 	GetByRoleID(ctx context.Context, roleID string) (*domain.RoleResume, error)
 }
+
+// RoleArtifactRepository defines operations for generic role artifacts
+type RoleArtifactRepository interface {
+	// Upsert creates or updates an artifact by (role_id, name).
+	// If an artifact with the same role_id and name exists, it updates the record.
+	// Otherwise, it creates a new record with a new ID.
+	Upsert(ctx context.Context, artifact *domain.RoleArtifact) (*domain.RoleArtifact, error)
+	// List returns all artifacts for a role, ordered by name ASC
+	List(ctx context.Context, roleID string) ([]*domain.RoleArtifact, error)
+	// GetByName retrieves an artifact by role_id and name
+	GetByName(ctx context.Context, roleID, name string) (*domain.RoleArtifact, error)
+	// Delete removes an artifact by role_id and name
+	Delete(ctx context.Context, roleID, name string) error
+}

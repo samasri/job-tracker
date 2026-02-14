@@ -57,6 +57,7 @@ func main() {
 	meetingV2Repo := sqlite.NewMeetingV2Repo(db)
 	jdRepo := sqlite.NewJobDescriptionRepo(db)
 	resumeRepo := sqlite.NewResumeRepo(db)
+	artifactRepo := sqlite.NewRoleArtifactRepo(db)
 
 	// Create filestore
 	fs := filestore.New(cfg.RepoRoot)
@@ -75,10 +76,11 @@ func main() {
 	meetingV2Service := app.NewMeetingV2Service(meetingV2Repo, companyRepo, roleRepo, threadRepo, fs)
 	jdService := app.NewJDService(jdRepo, companyRepo, roleRepo, fs)
 	resumeService := app.NewResumeService(resumeRepo, companyRepo, roleRepo, fs)
+	artifactService := app.NewArtifactService(artifactRepo, companyRepo, roleRepo, fs)
 	exportService := app.NewExportService(db, cfg.RepoRoot)
 
 	// Create handlers
-	handlers := httpserver.NewHandlers(companyService, contactService, threadService, meetingService, meetingV2Service, jdService, resumeService, exportService)
+	handlers := httpserver.NewHandlers(companyService, contactService, threadService, meetingService, meetingV2Service, jdService, resumeService, artifactService, exportService)
 
 	// Create HTTP server
 	server := httpserver.NewServer(handlers)

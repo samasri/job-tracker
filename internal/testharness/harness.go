@@ -39,6 +39,7 @@ type TestEnv struct {
 	MeetingV2Service *app.MeetingV2Service
 	JDService        *app.JDService
 	ResumeService    *app.ResumeService
+	ArtifactService  *app.ArtifactService
 	ExportService    *app.ExportService
 }
 
@@ -86,6 +87,7 @@ func NewTestEnv(t *testing.T) *TestEnv {
 	meetingV2Repo := sqlite.NewMeetingV2Repo(db)
 	jdRepo := sqlite.NewJobDescriptionRepo(db)
 	resumeRepo := sqlite.NewResumeRepo(db)
+	artifactRepo := sqlite.NewRoleArtifactRepo(db)
 
 	// Create filestore
 	fs := filestore.New(repoRoot)
@@ -98,10 +100,11 @@ func NewTestEnv(t *testing.T) *TestEnv {
 	meetingV2Service := app.NewMeetingV2Service(meetingV2Repo, companyRepo, roleRepo, threadRepo, fs)
 	jdService := app.NewJDService(jdRepo, companyRepo, roleRepo, fs)
 	resumeService := app.NewResumeService(resumeRepo, companyRepo, roleRepo, fs)
+	artifactService := app.NewArtifactService(artifactRepo, companyRepo, roleRepo, fs)
 	exportService := app.NewExportService(db, repoRoot)
 
 	// Create handlers
-	handlers := httpserver.NewHandlers(companyService, contactService, threadService, meetingService, meetingV2Service, jdService, resumeService, exportService)
+	handlers := httpserver.NewHandlers(companyService, contactService, threadService, meetingService, meetingV2Service, jdService, resumeService, artifactService, exportService)
 
 	// Create HTTP server
 	server := httpserver.NewServer(handlers)
@@ -121,6 +124,7 @@ func NewTestEnv(t *testing.T) *TestEnv {
 		MeetingV2Service: meetingV2Service,
 		JDService:        jdService,
 		ResumeService:    resumeService,
+		ArtifactService:  artifactService,
 		ExportService:    exportService,
 	}
 

@@ -40,6 +40,7 @@ type ExportData struct {
 	ThreadRoles     []ExportThreadRole     `json:"thread_roles"`
 	JobDescriptions []ExportJobDescription `json:"job_descriptions"`
 	Resumes         []ExportResume         `json:"resumes"`
+	RoleArtifacts   []ExportRoleArtifact   `json:"role_artifacts"`
 }
 
 // ExportCompanyView represents computed view data for a company
@@ -142,6 +143,17 @@ type ExportResume struct {
 	PathPDF  string `json:"path_pdf,omitempty"`
 }
 
+// ExportRoleArtifact represents a role artifact in the export
+type ExportRoleArtifact struct {
+	ID        string `json:"id"`
+	RoleID    string `json:"role_id"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Path      string `json:"path"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 // Export exports the database to db/export.json
 func (s *ExportService) Export(ctx context.Context) error {
 	data := &ExportData{
@@ -157,6 +169,7 @@ func (s *ExportService) Export(ctx context.Context) error {
 		ThreadRoles:     []ExportThreadRole{},
 		JobDescriptions: []ExportJobDescription{},
 		Resumes:         []ExportResume{},
+		RoleArtifacts:   []ExportRoleArtifact{},
 	}
 
 	// Export companies (ordered by id for determinism)
@@ -376,6 +389,24 @@ func (s *ExportService) Export(ctx context.Context) error {
 			r.PathPDF = *pathPDF
 		}
 		data.Resumes = append(data.Resumes, r)
+	}
+	rows.Close()
+
+	// Export role_artifacts (ordered by role_id, name for determinism)
+	rows, err = s.db.QueryContext(ctx, `SELECT id, role_id, name, type, path, created_at, updated_at FROM role_artifacts ORDER BY role_id, name`)
+	if err != nil {
+		return fmt.Errorf("exporting role_artifacts: %w", err)
+	}
+	for rows.Next() {
+		var a ExportRoleArtifact
+		var createdAt, updatedAt time.Time
+		if err := rows.Scan(&a.ID, &a.RoleID, &a.Name, &a.Type, &a.Path, &createdAt, &updatedAt); err != nil {
+			rows.Close()
+			return fmt.Errorf("scanning role_artifact: %w", err)
+		}
+		a.CreatedAt = createdAt.Format(time.RFC3339)
+		a.UpdatedAt = updatedAt.Format(time.RFC3339)
+		data.RoleArtifacts = append(data.RoleArtifacts, a)
 	}
 	rows.Close()
 

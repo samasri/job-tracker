@@ -774,18 +774,12 @@ func TestUI_AttachJDViaForm(t *testing.T) {
 		"title": "JD Test Role",
 	})
 
-	// Verify role page loads and has the JD form
+	// Verify role page loads (legacy JD form removed in favor of artifacts)
 	roleResp := env.Get("/companies/jd-test-company/roles/jd-test-role")
 	env.AssertStatus(roleResp, 200)
-	roleBody := env.ReadBody(roleResp)
-	if !strings.Contains(roleBody, "Attach Job Description") {
-		t.Error("Role page should contain 'Attach Job Description' form")
-	}
-	if !strings.Contains(roleBody, "No job description attached") {
-		t.Error("Role page should indicate no JD attached initially")
-	}
 
-	// Attach JD via multipart form (HTML only for simplicity)
+	// Attach JD via legacy multipart form (HTML only for simplicity)
+	// Legacy endpoint still works but UI section has been removed
 	jdResp := env.PostMultipart("/companies/jd-test-company/roles/jd-test-role/jd",
 		map[string]string{"html": "<html><body><h1>Test JD</h1></body></html>"},
 		nil,
@@ -797,16 +791,12 @@ func TestUI_AttachJDViaForm(t *testing.T) {
 
 	// Verify JD files exist
 	if !env.FileExists("data/companies/jd-test-company/roles/jd-test-role/job.html") {
-		t.Error("job.html should exist after attaching JD via UI")
+		t.Error("job.html should exist after attaching JD via legacy endpoint")
 	}
 
-	// Verify role page now shows JD
+	// Verify role page loads after JD attachment
 	roleResp2 := env.Get("/companies/jd-test-company/roles/jd-test-role")
 	env.AssertStatus(roleResp2, 200)
-	roleBody2 := env.ReadBody(roleResp2)
-	if !strings.Contains(roleBody2, "job.html") {
-		t.Error("Role page should show JD path after attachment")
-	}
 }
 
 // U4 Behavioral Test: Export via UI
@@ -1574,13 +1564,9 @@ func TestUI_ResumeAttachment(t *testing.T) {
 		t.Error("resume.jsonc should contain the uploaded content")
 	}
 
-	// Check role page shows JSON path
+	// Verify role page loads successfully (legacy resume section removed in favor of artifacts)
 	roleResp := env.Get("/companies/resume-test-company/roles/resume-test-role")
 	env.AssertStatus(roleResp, 200)
-	roleBody := env.ReadBody(roleResp)
-	if !strings.Contains(roleBody, "resume/resume.jsonc") {
-		t.Error("Role page should show JSON resume path")
-	}
 
 	// Now attach PDF file only
 	pdfContent := []byte("%PDF-1.4 test content")
@@ -1597,16 +1583,9 @@ func TestUI_ResumeAttachment(t *testing.T) {
 		t.Error("resume.pdf should exist")
 	}
 
-	// Check role page shows both paths
+	// Verify role page loads successfully after PDF attach
 	roleResp2 := env.Get("/companies/resume-test-company/roles/resume-test-role")
 	env.AssertStatus(roleResp2, 200)
-	roleBody2 := env.ReadBody(roleResp2)
-	if !strings.Contains(roleBody2, "resume/resume.jsonc") {
-		t.Error("Role page should show JSON resume path")
-	}
-	if !strings.Contains(roleBody2, "resume/resume.pdf") {
-		t.Error("Role page should show PDF resume path")
-	}
 
 	// Test overwrite: submit new JSON via textarea
 	newJsonContent := `{"name": "Updated Resume", "version": 2}`

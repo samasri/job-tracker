@@ -195,3 +195,98 @@ func (m *MeetingV2) IsRoleMeeting() bool {
 func (m *MeetingV2) IsThreadMeeting() bool {
 	return m.ThreadID != ""
 }
+
+// ArtifactType represents the type of artifact content
+type ArtifactType string
+
+const (
+	ArtifactTypePDF   ArtifactType = "pdf"
+	ArtifactTypeJSONC ArtifactType = "jsonc"
+	ArtifactTypeText  ArtifactType = "text"
+	ArtifactTypeHTML  ArtifactType = "html"
+)
+
+// AllArtifactTypes returns all valid artifact types
+func AllArtifactTypes() []ArtifactType {
+	return []ArtifactType{
+		ArtifactTypePDF,
+		ArtifactTypeJSONC,
+		ArtifactTypeText,
+		ArtifactTypeHTML,
+	}
+}
+
+// String returns the string representation of the artifact type
+func (t ArtifactType) String() string {
+	return string(t)
+}
+
+// ParseArtifactType parses a string into an ArtifactType, returning an error for invalid values
+func ParseArtifactType(s string) (ArtifactType, error) {
+	t := ArtifactType(s)
+	for _, valid := range AllArtifactTypes() {
+		if t == valid {
+			return t, nil
+		}
+	}
+	return "", fmt.Errorf("invalid artifact type: %q (must be pdf, jsonc, text, or html)", s)
+}
+
+// IsValid returns true if the type is a valid artifact type
+func (t ArtifactType) IsValid() bool {
+	_, err := ParseArtifactType(string(t))
+	return err == nil
+}
+
+// Extension returns the file extension for this artifact type
+func (t ArtifactType) Extension() string {
+	switch t {
+	case ArtifactTypePDF:
+		return ".pdf"
+	case ArtifactTypeJSONC:
+		return ".jsonc"
+	case ArtifactTypeText:
+		return ".txt"
+	case ArtifactTypeHTML:
+		return ".html"
+	default:
+		return ".txt"
+	}
+}
+
+// RoleArtifact represents a generic artifact attached to a role
+type RoleArtifact struct {
+	ID        string
+	RoleID    string
+	Name      string
+	Type      ArtifactType
+	Path      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// ValidateArtifactName validates an artifact name
+func ValidateArtifactName(name string) error {
+	name = trimSpaces(name)
+	if name == "" {
+		return fmt.Errorf("artifact name cannot be empty")
+	}
+	if len(name) > 255 {
+		return fmt.Errorf("artifact name too long (max 255 characters)")
+	}
+	return nil
+}
+
+// trimSpaces trims leading and trailing whitespace
+func trimSpaces(s string) string {
+	// Simple trim - Go's strings.TrimSpace handles this but we avoid import
+	start := 0
+	end := len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
+		end--
+	}
+	return s[start:end]
+}
