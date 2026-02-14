@@ -70,3 +70,9 @@ type MeetingV2Repository interface {
 	// ListByThread retrieves all thread-only meetings for a thread ordered by occurred_at desc
 	ListByThread(ctx context.Context, threadID string) ([]*domain.MeetingV2, error)
 }
+
+// ResumeRepository defines operations for role resume artifacts
+type ResumeRepository interface {
+	Save(ctx context.Context, resume *domain.RoleResume) error
+	GetByRoleID(ctx context.Context, roleID string) (*domain.RoleResume, error)
+}

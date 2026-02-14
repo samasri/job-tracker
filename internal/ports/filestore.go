@@ -32,4 +32,10 @@ type FileStore interface {
 
 	// ReadFile reads the content of a file at the given relative path
 	ReadFile(ctx context.Context, path string) (string, error)
+
+	// SaveRoleResumeJSON saves the resume JSON data for a role
+	SaveRoleResumeJSON(ctx context.Context, companySlug, roleSlug string, content string) (filePath string, err error)
+
+	// SaveRoleResumePDF saves the resume PDF for a role
+	SaveRoleResumePDF(ctx context.Context, companySlug, roleSlug string, content io.Reader) (filePath string, err error)
 }

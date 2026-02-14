@@ -149,3 +149,124 @@ func TestCreateBothMeetingTypes(t *testing.T) {
 		t.Error("Thread meeting path should be flattened (no /meetings subfolder)")
 	}
 }
+
+func TestSaveRoleResumeJSON(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "filestore-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	fs := filestore.New(tempDir)
+	ctx := context.Background()
+
+	// Save resume JSON
+	jsonContent := `{"name": "Test Resume", "skills": ["Go", "TypeScript"]}`
+	path, err := fs.SaveRoleResumeJSON(ctx, "acme-corp", "senior-engineer", jsonContent)
+	if err != nil {
+		t.Fatalf("SaveRoleResumeJSON failed: %v", err)
+	}
+
+	// Verify path format
+	expectedPath := "data/companies/acme-corp/roles/senior-engineer/resume/resume.jsonc"
+	if path != expectedPath {
+		t.Errorf("Expected path %q, got %q", expectedPath, path)
+	}
+
+	// Verify file exists
+	absPath := filepath.Join(tempDir, path)
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		t.Errorf("File should exist at %s", absPath)
+	}
+
+	// Verify content
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+	if !strings.Contains(string(content), "Test Resume") {
+		t.Error("Content should contain resume data")
+	}
+}
+
+func TestSaveRoleResumePDF(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "filestore-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	fs := filestore.New(tempDir)
+	ctx := context.Background()
+
+	// Save resume PDF (simulated PDF content)
+	pdfContent := strings.NewReader("%PDF-1.4 fake pdf content")
+	path, err := fs.SaveRoleResumePDF(ctx, "acme-corp", "senior-engineer", pdfContent)
+	if err != nil {
+		t.Fatalf("SaveRoleResumePDF failed: %v", err)
+	}
+
+	// Verify path format
+	expectedPath := "data/companies/acme-corp/roles/senior-engineer/resume/resume.pdf"
+	if path != expectedPath {
+		t.Errorf("Expected path %q, got %q", expectedPath, path)
+	}
+
+	// Verify file exists
+	absPath := filepath.Join(tempDir, path)
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		t.Errorf("File should exist at %s", absPath)
+	}
+
+	// Verify content
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+	if !strings.Contains(string(content), "%PDF") {
+		t.Error("Content should contain PDF data")
+	}
+}
+
+func TestSaveRoleResumeOverwrite(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "filestore-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	fs := filestore.New(tempDir)
+	ctx := context.Background()
+
+	// Save initial resume JSON
+	jsonContent1 := `{"version": 1}`
+	path1, err := fs.SaveRoleResumeJSON(ctx, "acme-corp", "senior-engineer", jsonContent1)
+	if err != nil {
+		t.Fatalf("First SaveRoleResumeJSON failed: %v", err)
+	}
+
+	// Save updated resume JSON (should overwrite)
+	jsonContent2 := `{"version": 2}`
+	path2, err := fs.SaveRoleResumeJSON(ctx, "acme-corp", "senior-engineer", jsonContent2)
+	if err != nil {
+		t.Fatalf("Second SaveRoleResumeJSON failed: %v", err)
+	}
+
+	// Verify same path
+	if path1 != path2 {
+		t.Errorf("Paths should be the same: %q vs %q", path1, path2)
+	}
+
+	// Verify content is updated
+	absPath := filepath.Join(tempDir, path2)
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+	if !strings.Contains(string(content), `"version": 2`) {
+		t.Error("Content should be updated to version 2")
+	}
+	if strings.Contains(string(content), `"version": 1`) {
+		t.Error("Old content should be overwritten")
+	}
+}

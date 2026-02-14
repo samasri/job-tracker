@@ -164,12 +164,11 @@ type RoleJobDescription struct {
 	PathPDF  string
 }
 
-// RoleResume represents a resume sent for a role
+// RoleResume represents the current resume attached to a role
 type RoleResume struct {
-	ID       string
 	RoleID   string
-	SentAt   time.Time
 	PathJSON string
+	PathPDF  string
 }
 
 // MeetingV2 represents a meeting in the new model where a meeting belongs to

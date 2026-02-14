@@ -1538,3 +1538,202 @@ func TestUI_JDViewer(t *testing.T) {
 	notFoundResp := env.Get("/companies/nonexistent/roles/nonexistent/jd")
 	env.AssertStatus(notFoundResp, 404)
 }
+
+// TestUI_ResumeAttachment tests the resume attachment feature E2E
+func TestUI_ResumeAttachment(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create company and role
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "resume-test-company",
+		"name": "Resume Test Company",
+	})
+	env.PostFormFollowRedirect("/companies/resume-test-company/roles/new", map[string]string{
+		"slug":  "resume-test-role",
+		"title": "Resume Test Role",
+	})
+
+	// Attach resume with JSON via textarea (form field)
+	jsonContent := `{"name": "Test Resume", "skills": ["Go", "Python"]}`
+	jsonResp := env.PostMultipart("/companies/resume-test-company/roles/resume-test-role/resume",
+		map[string]string{"resume_json": jsonContent},
+		nil,
+	)
+	if jsonResp.StatusCode != 303 && jsonResp.StatusCode != 200 {
+		t.Errorf("Expected redirect or success, got %d", jsonResp.StatusCode)
+	}
+
+	// Verify JSON file exists
+	if !env.FileExists("data/companies/resume-test-company/roles/resume-test-role/resume/resume.jsonc") {
+		t.Error("resume.jsonc should exist")
+	}
+
+	// Verify file content
+	jsonFileContent := env.ReadFile("data/companies/resume-test-company/roles/resume-test-role/resume/resume.jsonc")
+	if !strings.Contains(jsonFileContent, "Test Resume") {
+		t.Error("resume.jsonc should contain the uploaded content")
+	}
+
+	// Check role page shows JSON path
+	roleResp := env.Get("/companies/resume-test-company/roles/resume-test-role")
+	env.AssertStatus(roleResp, 200)
+	roleBody := env.ReadBody(roleResp)
+	if !strings.Contains(roleBody, "resume/resume.jsonc") {
+		t.Error("Role page should show JSON resume path")
+	}
+
+	// Now attach PDF file only
+	pdfContent := []byte("%PDF-1.4 test content")
+	pdfResp := env.PostMultipart("/companies/resume-test-company/roles/resume-test-role/resume",
+		nil,
+		map[string][]byte{"pdf": pdfContent},
+	)
+	if pdfResp.StatusCode != 303 && pdfResp.StatusCode != 200 {
+		t.Errorf("Expected redirect or success, got %d", pdfResp.StatusCode)
+	}
+
+	// Verify PDF file exists
+	if !env.FileExists("data/companies/resume-test-company/roles/resume-test-role/resume/resume.pdf") {
+		t.Error("resume.pdf should exist")
+	}
+
+	// Check role page shows both paths
+	roleResp2 := env.Get("/companies/resume-test-company/roles/resume-test-role")
+	env.AssertStatus(roleResp2, 200)
+	roleBody2 := env.ReadBody(roleResp2)
+	if !strings.Contains(roleBody2, "resume/resume.jsonc") {
+		t.Error("Role page should show JSON resume path")
+	}
+	if !strings.Contains(roleBody2, "resume/resume.pdf") {
+		t.Error("Role page should show PDF resume path")
+	}
+
+	// Test overwrite: submit new JSON via textarea
+	newJsonContent := `{"name": "Updated Resume", "version": 2}`
+	overwriteResp := env.PostMultipart("/companies/resume-test-company/roles/resume-test-role/resume",
+		map[string]string{"resume_json": newJsonContent},
+		nil,
+	)
+	if overwriteResp.StatusCode != 303 && overwriteResp.StatusCode != 200 {
+		t.Errorf("Expected redirect or success, got %d", overwriteResp.StatusCode)
+	}
+
+	// Verify content was overwritten
+	updatedContent := env.ReadFile("data/companies/resume-test-company/roles/resume-test-role/resume/resume.jsonc")
+	if !strings.Contains(updatedContent, "Updated Resume") {
+		t.Error("resume.jsonc should be overwritten with new content")
+	}
+	if strings.Contains(updatedContent, "Test Resume") {
+		t.Error("Old content should be replaced")
+	}
+
+	// Test error: no content provided - should redirect with error message
+	emptyResp := env.PostMultipart("/companies/resume-test-company/roles/resume-test-role/resume",
+		nil,
+		nil,
+	)
+	// Client follows redirect, so we get 200 with error message in body
+	env.AssertStatus(emptyResp, 200)
+	emptyBody := env.ReadBody(emptyResp)
+	if !strings.Contains(emptyBody, "At least JSON or PDF must be provided") {
+		t.Error("Error message should be shown when no content provided")
+	}
+
+	// Test error: invalid JSON - should redirect with error message and NOT overwrite
+	invalidJsonResp := env.PostMultipart("/companies/resume-test-company/roles/resume-test-role/resume",
+		map[string]string{"resume_json": "{ not valid json"},
+		nil,
+	)
+	// Client follows redirect, so we get 200 with error message in body
+	env.AssertStatus(invalidJsonResp, 200)
+	invalidJsonBody := env.ReadBody(invalidJsonResp)
+	if !strings.Contains(invalidJsonBody, "invalid JSON") {
+		t.Error("Error message should be shown when invalid JSON provided")
+	}
+
+	// Verify original content is still there (not overwritten by invalid JSON)
+	stillValidContent := env.ReadFile("data/companies/resume-test-company/roles/resume-test-role/resume/resume.jsonc")
+	if !strings.Contains(stillValidContent, "Updated Resume") {
+		t.Error("resume.jsonc should not be overwritten by invalid JSON submission")
+	}
+
+	// Test JSONC support: JSON with comments should be accepted
+	jsoncContent := `{
+		// This is a single-line comment
+		"name": "JSONC Resume",
+		/* This is a
+		   multi-line comment */
+		"skills": ["Go", "TypeScript"],
+		"trailing": "comma", // trailing comma below
+	}`
+	jsoncResp := env.PostMultipart("/companies/resume-test-company/roles/resume-test-role/resume",
+		map[string]string{"resume_json": jsoncContent},
+		nil,
+	)
+	if jsoncResp.StatusCode != 303 && jsoncResp.StatusCode != 200 {
+		t.Errorf("JSONC should be accepted, got status %d", jsoncResp.StatusCode)
+	}
+
+	// Verify saved file preserves comments (JSONC format)
+	savedJSONC := env.ReadFile("data/companies/resume-test-company/roles/resume-test-role/resume/resume.jsonc")
+	if !strings.Contains(savedJSONC, "// This is a single-line comment") {
+		t.Error("Saved file should preserve single-line comments")
+	}
+	if !strings.Contains(savedJSONC, "/* This is a") {
+		t.Error("Saved file should preserve multi-line comments")
+	}
+	if !strings.Contains(savedJSONC, "JSONC Resume") {
+		t.Error("Saved file should contain the resume data")
+	}
+}
+
+// TestExport_IncludesResumes verifies that export.json includes resume paths
+func TestExport_IncludesResumes(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create company and role
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "export-resume-company",
+		"name": "Export Resume Company",
+	})
+	env.PostFormFollowRedirect("/companies/export-resume-company/roles/new", map[string]string{
+		"slug":  "export-resume-role",
+		"title": "Export Resume Role",
+	})
+
+	// Attach resume with both JSON (via textarea) and PDF
+	jsonContent := `{"name": "Export Test Resume"}`
+	pdfContent := []byte("%PDF-1.4 export test")
+	env.PostMultipart("/companies/export-resume-company/roles/export-resume-role/resume",
+		map[string]string{"resume_json": jsonContent},
+		map[string][]byte{"pdf": pdfContent},
+	)
+
+	// Run export
+	exportResp := env.PostFormFollowRedirect("/export", map[string]string{})
+	env.AssertStatus(exportResp, 200)
+
+	// Verify export contains resume paths
+	exportContent := env.ReadFile("db/export.json")
+	if !strings.Contains(exportContent, `"resumes"`) {
+		t.Error("export.json should contain resumes array")
+	}
+	if !strings.Contains(exportContent, "resume/resume.jsonc") {
+		t.Error("export.json should contain JSON resume path")
+	}
+	if !strings.Contains(exportContent, "resume/resume.pdf") {
+		t.Error("export.json should contain PDF resume path")
+	}
+
+	// Verify determinism: export again and compare
+	export1 := env.ReadFile("db/export.json")
+	env.PostFormFollowRedirect("/export", map[string]string{})
+	export2 := env.ReadFile("db/export.json")
+
+	// Strip timestamps and compare
+	export1Lines := stripExportedAt(export1)
+	export2Lines := stripExportedAt(export2)
+	if export1Lines != export2Lines {
+		t.Error("Export with resumes should be deterministic")
+	}
+}

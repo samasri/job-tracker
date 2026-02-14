@@ -22,6 +22,7 @@ type Handlers struct {
 	meetingService   *app.MeetingService
 	meetingV2Service *app.MeetingV2Service
 	jdService        *app.JDService
+	resumeService    *app.ResumeService
 	exportService    *app.ExportService
 	views            *views.Views
 }
@@ -34,6 +35,7 @@ func NewHandlers(
 	meetingService *app.MeetingService,
 	meetingV2Service *app.MeetingV2Service,
 	jdService *app.JDService,
+	resumeService *app.ResumeService,
 	exportService *app.ExportService,
 ) *Handlers {
 	v, err := views.New()
@@ -48,6 +50,7 @@ func NewHandlers(
 		meetingService:   meetingService,
 		meetingV2Service: meetingV2Service,
 		jdService:        jdService,
+		resumeService:    resumeService,
 		exportService:    exportService,
 		views:            v,
 	}
@@ -1285,6 +1288,17 @@ func (h *Handlers) HandleRolePage() http.HandlerFunc {
 			jdData.PathPDF = jd.PathPDF
 		}
 
+		// Get Resume info
+		resume, _ := h.resumeService.GetResume(r.Context(), companySlug, roleSlug)
+		resumeData := struct {
+			PathJSON string
+			PathPDF  string
+		}{}
+		if resume != nil {
+			resumeData.PathJSON = resume.PathJSON
+			resumeData.PathPDF = resume.PathPDF
+		}
+
 		// Check for success/error query params
 		successMsg := r.URL.Query().Get("success")
 		errorMsg := r.URL.Query().Get("error")
@@ -1309,6 +1323,7 @@ func (h *Handlers) HandleRolePage() http.HandlerFunc {
 			"Company":     company.Company,
 			"Role":        role,
 			"JD":          jdData,
+			"Resume":      resumeData,
 			"AllStatuses": allStatuses,
 			"Meetings":    meetings,
 			"Success":     successMsg,
@@ -1398,6 +1413,54 @@ func (h *Handlers) HandleAttachJDForm() http.HandlerFunc {
 		}
 
 		http.Redirect(w, r, redirectURL+"?success=Job+description+attached", http.StatusSeeOther)
+	}
+}
+
+// HandleAttachResumeForm handles POST /companies/{companySlug}/roles/{roleSlug}/resume (HTML form)
+func (h *Handlers) HandleAttachResumeForm() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		companySlug := chi.URLParam(r, "companySlug")
+		roleSlug := chi.URLParam(r, "roleSlug")
+		redirectURL := "/companies/" + companySlug + "/roles/" + roleSlug
+
+		// Parse multipart form (max 20MB for resumes)
+		if err := r.ParseMultipartForm(20 << 20); err != nil {
+			http.Redirect(w, r, redirectURL+"?error=Failed+to+parse+form", http.StatusSeeOther)
+			return
+		}
+
+		// Get JSON content from textarea
+		jsonContent := r.FormValue("resume_json")
+
+		// Get PDF file if provided
+		var pdfReader *multipartFileReader
+		pdfFile, _, err := r.FormFile("pdf")
+		if err == nil {
+			defer pdfFile.Close()
+			pdfReader = &multipartFileReader{pdfFile}
+		}
+
+		if jsonContent == "" && pdfReader == nil {
+			http.Redirect(w, r, redirectURL+"?error=At+least+JSON+or+PDF+must+be+provided", http.StatusSeeOther)
+			return
+		}
+
+		input := app.AttachResumeInput{
+			CompanySlug: companySlug,
+			RoleSlug:    roleSlug,
+			JSONContent: jsonContent,
+		}
+		if pdfReader != nil {
+			input.PDFContent = pdfReader
+		}
+
+		_, err = h.resumeService.AttachResume(r.Context(), input)
+		if err != nil {
+			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
+		}
+
+		http.Redirect(w, r, redirectURL+"?success=Resume+attached", http.StatusSeeOther)
 	}
 }
 

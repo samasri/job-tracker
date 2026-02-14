@@ -28,17 +28,18 @@ func NewExportService(db *sqlite.DB, repoRoot string) *ExportService {
 
 // ExportData represents the complete database export
 type ExportData struct {
-	ExportedAt      string                  `json:"exported_at"`
-	Companies       []ExportCompany         `json:"companies"`
-	CompanyViews    []ExportCompanyView     `json:"company_views"`
-	Roles           []ExportRole            `json:"roles"`
-	Contacts        []ExportContact         `json:"contacts"`
-	Threads         []ExportThread          `json:"threads"`
-	Meetings        []ExportMeeting         `json:"meetings"`
-	MeetingsV2      []ExportMeetingV2       `json:"meetings_v2"`
-	MeetingThreads  []ExportMeetingThread   `json:"meeting_threads"`
-	ThreadRoles     []ExportThreadRole      `json:"thread_roles"`
-	JobDescriptions []ExportJobDescription  `json:"job_descriptions"`
+	ExportedAt      string                 `json:"exported_at"`
+	Companies       []ExportCompany        `json:"companies"`
+	CompanyViews    []ExportCompanyView    `json:"company_views"`
+	Roles           []ExportRole           `json:"roles"`
+	Contacts        []ExportContact        `json:"contacts"`
+	Threads         []ExportThread         `json:"threads"`
+	Meetings        []ExportMeeting        `json:"meetings"`
+	MeetingsV2      []ExportMeetingV2      `json:"meetings_v2"`
+	MeetingThreads  []ExportMeetingThread  `json:"meeting_threads"`
+	ThreadRoles     []ExportThreadRole     `json:"thread_roles"`
+	JobDescriptions []ExportJobDescription `json:"job_descriptions"`
+	Resumes         []ExportResume         `json:"resumes"`
 }
 
 // ExportCompanyView represents computed view data for a company
@@ -134,6 +135,13 @@ type ExportJobDescription struct {
 	PathPDF  string `json:"path_pdf,omitempty"`
 }
 
+// ExportResume represents a role resume in the export
+type ExportResume struct {
+	RoleID   string `json:"role_id"`
+	PathJSON string `json:"path_json,omitempty"`
+	PathPDF  string `json:"path_pdf,omitempty"`
+}
+
 // Export exports the database to db/export.json
 func (s *ExportService) Export(ctx context.Context) error {
 	data := &ExportData{
@@ -148,6 +156,7 @@ func (s *ExportService) Export(ctx context.Context) error {
 		MeetingThreads:  []ExportMeetingThread{},
 		ThreadRoles:     []ExportThreadRole{},
 		JobDescriptions: []ExportJobDescription{},
+		Resumes:         []ExportResume{},
 	}
 
 	// Export companies (ordered by id for determinism)
@@ -345,6 +354,28 @@ func (s *ExportService) Export(ctx context.Context) error {
 			jd.PathPDF = *pathPDF
 		}
 		data.JobDescriptions = append(data.JobDescriptions, jd)
+	}
+	rows.Close()
+
+	// Export resumes (ordered by role_id for determinism)
+	rows, err = s.db.QueryContext(ctx, `SELECT role_id, path_json, path_pdf FROM role_resumes ORDER BY role_id`)
+	if err != nil {
+		return fmt.Errorf("exporting resumes: %w", err)
+	}
+	for rows.Next() {
+		var r ExportResume
+		var pathJSON, pathPDF *string
+		if err := rows.Scan(&r.RoleID, &pathJSON, &pathPDF); err != nil {
+			rows.Close()
+			return fmt.Errorf("scanning resume: %w", err)
+		}
+		if pathJSON != nil {
+			r.PathJSON = *pathJSON
+		}
+		if pathPDF != nil {
+			r.PathPDF = *pathPDF
+		}
+		data.Resumes = append(data.Resumes, r)
 	}
 	rows.Close()
 

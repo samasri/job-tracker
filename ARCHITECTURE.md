@@ -34,6 +34,7 @@ job-hunter-v2/
 │   │   ├── meeting_service.go   # Legacy meeting operations (deprecated)
 │   │   ├── meeting_v2_service.go # Role/Thread meeting operations
 │   │   ├── jd_service.go        # Job description attachment
+│   │   ├── resume_service.go    # Resume attachment
 │   │   └── export_service.go    # JSON export
 │   ├── config/
 │   │   └── config.go            # Environment-based configuration
@@ -66,6 +67,7 @@ job-hunter-v2/
 │   │       ├── meeting_repo.go  # Legacy MeetingRepository (deprecated)
 │   │       ├── meeting_v2_repo.go # MeetingV2Repository implementation
 │   │       ├── jd_repo.go       # JobDescriptionRepository implementation
+│   │       ├── resume_repo.go   # ResumeRepository implementation
 │   │       └── migrations/
 │   │           ├── 001_initial.go                    # companies, roles
 │   │           ├── 002_contacts_threads_meetings.go  # contacts, threads, meetings, meeting_threads
@@ -73,7 +75,8 @@ job-hunter-v2/
 │   │           ├── 004_job_descriptions.go           # role_job_descriptions
 │   │           ├── 005_role_status.go                # role status column
 │   │           ├── 006_meetings_v2.go                # meetings_v2 with XOR constraint
-│   │           └── 007_thread_code_slug.go           # thread code, slug, folder_path columns
+│   │           ├── 007_thread_code_slug.go           # thread code, slug, folder_path columns
+│   │           └── 008_role_resumes.go               # role_resumes table
 │   ├── ports/
 │   │   ├── repositories.go      # Repository interfaces
 │   │   └── filestore.go         # FileStore interface
@@ -87,9 +90,11 @@ job-hunter-v2/
 │   │       │   └── {role-slug}/
 │   │       │       ├── job.html # Job description HTML
 │   │       │       ├── job.pdf  # Job description PDF
+│   │       │       ├── resume/
+│   │       │       │   ├── resume.jsonc  # Resume data JSON
+│   │       │       │   └── resume.pdf   # Resume PDF
 │   │       │       └── meetings/
 │   │       │           └── YYYY-MM-DD_title_<8-char-id>.md  # Role meetings
-│   │       └── resumes/
 │   └── threads/
 │       └── {contact-slug}-{THREADCODE8}/    # e.g., john-smith-6PPEZJPW (or thread-6PPEZJPW if no contact)
 │           └── YYYY-MM-DD_title_<8-char-id>.md  # Thread meetings (flattened, no /meetings subfolder)
@@ -228,6 +233,13 @@ type RoleJobDescription struct {
     PathHTML string
     PathPDF  string
 }
+
+// RoleResume represents the current resume attached to a role
+type RoleResume struct {
+    RoleID   string
+    PathJSON string
+    PathPDF  string
+}
 ```
 
 ## Database Schema (ERD)
@@ -257,6 +269,14 @@ erDiagram
     role_job_descriptions {
         TEXT role_id PK,FK
         TEXT path_html
+        TEXT path_pdf
+        DATETIME created_at
+        DATETIME updated_at
+    }
+
+    role_resumes {
+        TEXT role_id PK,FK
+        TEXT path_json
         TEXT path_pdf
         DATETIME created_at
         DATETIME updated_at
@@ -302,6 +322,7 @@ erDiagram
 
     companies ||--o{ roles : "has"
     roles ||--o| role_job_descriptions : "has"
+    roles ||--o| role_resumes : "has"
     contacts ||--o{ threads : "owns"
     roles ||--o{ meetings_v2 : "has role meetings"
     threads ||--o{ meetings_v2 : "has thread-only meetings"
@@ -312,6 +333,7 @@ erDiagram
 
 - **Company → Roles**: One company has many roles (1:N)
 - **Role → JobDescription**: One role has at most one JD record (1:1)
+- **Role → Resume**: One role has at most one resume record (1:1)
 - **Contact → Threads**: One contact can have many threads (1:N, optional)
 - **Role → Meetings (v2)**: One role has many meetings (1:N) - role meetings
 - **Thread → Meetings (v2)**: One thread has many meetings (1:N) - thread-only meetings
@@ -332,7 +354,8 @@ The following tables exist but are no longer used by application code:
 | Metadata, relationships, IDs | SQLite (`db/index.sqlite`) | Fast queries, joins, search |
 | Notes, artifacts | Filesystem (`data/`) | Human-readable, easy to edit, git-friendly |
 | Company status | `company.md` frontmatter | Manual editing, visible in UI |
-| Job descriptions | `job.html`, `job.pdf` | Preserve formatting |
+| Job descriptions | `job.html`, `job.pdf` | Preserve formatting, HTML via textarea |
+| Resumes | `resume/resume.jsonc`, `resume/resume.pdf` | Per-role, single current version, JSON via textarea |
 | Role meeting notes | `data/companies/{slug}/roles/{role}/meetings/YYYY-MM-DD_title_<id>.md` | Chronological, grouped by role |
 | Thread meeting notes | `data/threads/{thread-slug}/YYYY-MM-DD_title_<id>.md` | Flattened, grouped by thread |
 
@@ -378,6 +401,7 @@ Environment variables (all optional):
 | POST | `/companies/{companySlug}/roles/{roleSlug}/jd` | Attach JD (multipart form) |
 | GET | `/companies/{companySlug}/roles/{roleSlug}/jd` | JD viewer page (sandboxed iframe) |
 | GET | `/companies/{companySlug}/roles/{roleSlug}/jd/raw` | Raw JD HTML with strict CSP headers |
+| POST | `/companies/{companySlug}/roles/{roleSlug}/resume` | Attach resume (JSON via textarea, PDF via file upload) |
 | POST | `/companies/{companySlug}/roles/{roleSlug}/meetings/new` | Create role meeting (form) |
 | GET | `/threads` | Thread list + Add Contact/Thread forms |
 | POST | `/threads/new` | Create thread (form) |
@@ -412,6 +436,11 @@ Environment variables (all optional):
    - `sandbox="allow-same-origin"` on iframe (blocks scripts, forms, popups)
    - CSP: `default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`
    - Only serves JD files linked in the database (not arbitrary filesystem access)
+5. **Resume validation**: Resume JSON input supports JSONC (JSON with Comments):
+   - Single-line comments (`// ...`)
+   - Multi-line comments (`/* ... */`)
+   - Trailing commas
+   - Comments are stripped for validation only; saved file preserves original content
 
 ### Testing
 

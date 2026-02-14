@@ -66,6 +66,38 @@
     </form>
 </div>
 
+<h2>Resume</h2>
+{{if or .Resume.PathJSON .Resume.PathPDF}}
+<div class="card">
+    {{if .Resume.PathJSON}}
+    <p><strong>JSON:</strong> <span class="path-display">{{.Resume.PathJSON}}</span></p>
+    {{end}}
+    {{if .Resume.PathPDF}}
+    <p><strong>PDF:</strong> <span class="path-display">{{.Resume.PathPDF}}</span></p>
+    {{end}}
+</div>
+{{else}}
+<div class="card">
+    <p>No resume attached yet. Add one below.</p>
+</div>
+{{end}}
+
+<div class="form-section">
+    <h3>Attach Resume</h3>
+    <form action="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/resume" method="POST" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="resume_json">Resume JSON</label>
+            <textarea id="resume_json" name="resume_json" placeholder="Paste resume-data JSON here..."></textarea>
+            <small>Paste the resume-data JSON used by the resume generator.</small>
+        </div>
+        <div class="form-group">
+            <label for="resume_pdf">Resume PDF File (optional)</label>
+            <input type="file" id="resume_pdf" name="pdf" accept=".pdf">
+        </div>
+        <button type="submit">Attach Resume</button>
+    </form>
+</div>
+
 <h2>Meetings</h2>
 {{if .Meetings}}
 <div class="card">

@@ -205,3 +205,47 @@ func (fs *FileStore) ReadFile(ctx context.Context, path string) (string, error) 
 
 	return string(content), nil
 }
+
+// SaveRoleResumeJSON saves the resume JSON data for a role
+func (fs *FileStore) SaveRoleResumeJSON(ctx context.Context, companySlug, roleSlug string, content string) (string, error) {
+	// Create resume folder if it doesn't exist
+	resumeDir := filepath.Join("data", "companies", companySlug, "roles", roleSlug, "resume")
+	absResumeDir := filepath.Join(fs.repoRoot, resumeDir)
+	if err := os.MkdirAll(absResumeDir, 0755); err != nil {
+		return "", fmt.Errorf("creating resume folder: %w", err)
+	}
+
+	filePath := filepath.Join(resumeDir, "resume.jsonc")
+	absPath := filepath.Join(fs.repoRoot, filePath)
+
+	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("writing resume.jsonc: %w", err)
+	}
+
+	return filePath, nil
+}
+
+// SaveRoleResumePDF saves the resume PDF for a role
+func (fs *FileStore) SaveRoleResumePDF(ctx context.Context, companySlug, roleSlug string, content io.Reader) (string, error) {
+	// Create resume folder if it doesn't exist
+	resumeDir := filepath.Join("data", "companies", companySlug, "roles", roleSlug, "resume")
+	absResumeDir := filepath.Join(fs.repoRoot, resumeDir)
+	if err := os.MkdirAll(absResumeDir, 0755); err != nil {
+		return "", fmt.Errorf("creating resume folder: %w", err)
+	}
+
+	filePath := filepath.Join(resumeDir, "resume.pdf")
+	absPath := filepath.Join(fs.repoRoot, filePath)
+
+	f, err := os.Create(absPath)
+	if err != nil {
+		return "", fmt.Errorf("creating resume.pdf: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, content); err != nil {
+		return "", fmt.Errorf("writing resume.pdf: %w", err)
+	}
+
+	return filePath, nil
+}
