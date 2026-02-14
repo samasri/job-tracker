@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 
 	"jobtracker/internal/app"
@@ -698,18 +699,19 @@ func (h *Handlers) HandleCompaniesPage() http.HandlerFunc {
 		}, 0, len(companies))
 
 		for _, c := range companies {
-			// Get meetings to find last touch
-			details, _ := h.companyService.GetCompany(r.Context(), c.Company.Slug)
+			// Get meetings from all roles to find last touch
 			var lastTouch string
-			if details != nil && len(details.Meetings) > 0 {
-				// Find most recent meeting
-				var latest time.Time
-				for _, m := range details.Meetings {
+			var latest time.Time
+			for _, role := range c.Roles {
+				meetings, _ := h.meetingV2Service.ListMeetingsByRole(r.Context(), role.ID)
+				for _, m := range meetings {
 					if m.OccurredAt.After(latest) {
 						latest = m.OccurredAt
 					}
 				}
-				lastTouch = latest.Format("Jan 02, 2006")
+			}
+			if !latest.IsZero() {
+				lastTouch = latest.Format("2006-01-02")
 			}
 
 			items = append(items, struct {
@@ -722,6 +724,17 @@ func (h *Handlers) HandleCompaniesPage() http.HandlerFunc {
 				LastTouch: lastTouch,
 			})
 		}
+
+		// Sort by last touch descending (most recent first, empty dates last)
+		sort.Slice(items, func(i, j int) bool {
+			if items[i].LastTouch == "" {
+				return false
+			}
+			if items[j].LastTouch == "" {
+				return true
+			}
+			return items[i].LastTouch > items[j].LastTouch
+		})
 
 		// Check for success/error query params (from redirects)
 		successMsg := r.URL.Query().Get("success")
@@ -934,16 +947,18 @@ func (h *Handlers) renderCompaniesPageWithError(w http.ResponseWriter, r *http.R
 	}, 0, len(companies))
 
 	for _, c := range companies {
-		details, _ := h.companyService.GetCompany(r.Context(), c.Company.Slug)
 		var lastTouch string
-		if details != nil && len(details.Meetings) > 0 {
-			var latest time.Time
-			for _, m := range details.Meetings {
+		var latest time.Time
+		for _, role := range c.Roles {
+			meetings, _ := h.meetingV2Service.ListMeetingsByRole(r.Context(), role.ID)
+			for _, m := range meetings {
 				if m.OccurredAt.After(latest) {
 					latest = m.OccurredAt
 				}
 			}
-			lastTouch = latest.Format("Jan 02, 2006")
+		}
+		if !latest.IsZero() {
+			lastTouch = latest.Format("2006-01-02")
 		}
 
 		items = append(items, struct {
@@ -956,6 +971,17 @@ func (h *Handlers) renderCompaniesPageWithError(w http.ResponseWriter, r *http.R
 			LastTouch: lastTouch,
 		})
 	}
+
+	// Sort by last touch descending (most recent first, empty dates last)
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].LastTouch == "" {
+			return false
+		}
+		if items[j].LastTouch == "" {
+			return true
+		}
+		return items[i].LastTouch > items[j].LastTouch
+	})
 
 	data := map[string]interface{}{
 		"Title":     "Companies",
