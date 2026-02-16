@@ -69,6 +69,8 @@ func (fs *FileStore) CreateRoleFolder(ctx context.Context, companySlug, roleSlug
 }
 
 // CreateMeetingNote creates a meeting note file
+// Deprecated: Use CreateRoleMeetingNote or CreateThreadMeetingNote instead.
+// This function is kept for backward compatibility with legacy meetings.
 func (fs *FileStore) CreateMeetingNote(ctx context.Context, companySlug, meetingID string, occurredAt, title string) (string, error) {
 	// Format: YYYY-MM-DD_<title>_<id>.md
 	safeTitle := strings.ReplaceAll(title, " ", "-")
@@ -266,6 +268,10 @@ func extensionForType(artifactType string) string {
 		return ".jsonc"
 	case "text":
 		return ".txt"
+	case "html":
+		return ".html"
+	case "markdown":
+		return ".md"
 	default:
 		return ".txt"
 	}

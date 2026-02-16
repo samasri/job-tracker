@@ -200,10 +200,11 @@ func (m *MeetingV2) IsThreadMeeting() bool {
 type ArtifactType string
 
 const (
-	ArtifactTypePDF   ArtifactType = "pdf"
-	ArtifactTypeJSONC ArtifactType = "jsonc"
-	ArtifactTypeText  ArtifactType = "text"
-	ArtifactTypeHTML  ArtifactType = "html"
+	ArtifactTypePDF      ArtifactType = "pdf"
+	ArtifactTypeJSONC    ArtifactType = "jsonc"
+	ArtifactTypeText     ArtifactType = "text"
+	ArtifactTypeHTML     ArtifactType = "html"
+	ArtifactTypeMarkdown ArtifactType = "markdown"
 )
 
 // AllArtifactTypes returns all valid artifact types
@@ -213,6 +214,7 @@ func AllArtifactTypes() []ArtifactType {
 		ArtifactTypeJSONC,
 		ArtifactTypeText,
 		ArtifactTypeHTML,
+		ArtifactTypeMarkdown,
 	}
 }
 
@@ -229,7 +231,7 @@ func ParseArtifactType(s string) (ArtifactType, error) {
 			return t, nil
 		}
 	}
-	return "", fmt.Errorf("invalid artifact type: %q (must be pdf, jsonc, text, or html)", s)
+	return "", fmt.Errorf("invalid artifact type: %q (must be pdf, jsonc, text, html, or markdown)", s)
 }
 
 // IsValid returns true if the type is a valid artifact type
@@ -249,6 +251,8 @@ func (t ArtifactType) Extension() string {
 		return ".txt"
 	case ArtifactTypeHTML:
 		return ".html"
+	case ArtifactTypeMarkdown:
+		return ".md"
 	default:
 		return ".txt"
 	}

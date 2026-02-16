@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"jobtracker/internal/http/views"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/yuin/goldmark"
 )
 
 // Handlers holds all HTTP handler dependencies
@@ -133,9 +135,10 @@ type RoleWithCompanyResponse struct {
 
 // ThreadWithDetailsResponse is a thread with its meetings and linked roles
 type ThreadWithDetailsResponse struct {
-	Thread   ThreadResponse            `json:"thread"`
-	Meetings []MeetingResponse         `json:"meetings"`
-	Roles    []RoleWithCompanyResponse `json:"roles"`
+	Thread     ThreadResponse            `json:"thread"`
+	Meetings   []MeetingResponse         `json:"meetings"`
+	MeetingsV2 []MeetingV2Response       `json:"meetings_v2"`
+	Roles      []RoleWithCompanyResponse `json:"roles"`
 }
 
 // --- Company Handlers ---
@@ -446,6 +449,7 @@ func (h *Handlers) HandleGetThread() http.HandlerFunc {
 			return
 		}
 
+		// Legacy meetings
 		meetings := make([]MeetingResponse, 0, len(thread.Meetings))
 		for _, m := range thread.Meetings {
 			meetings = append(meetings, MeetingResponse{
@@ -453,6 +457,19 @@ func (h *Handlers) HandleGetThread() http.HandlerFunc {
 				OccurredAt: m.OccurredAt.Format(time.RFC3339),
 				Title:      m.Title,
 				CompanyID:  m.CompanyID,
+				PathMD:     m.PathMD,
+			})
+		}
+
+		// V2 thread meetings
+		threadMeetings, _ := h.meetingV2Service.ListMeetingsByThread(r.Context(), id)
+		meetingsV2 := make([]MeetingV2Response, 0, len(threadMeetings))
+		for _, m := range threadMeetings {
+			meetingsV2 = append(meetingsV2, MeetingV2Response{
+				ID:         m.ID,
+				OccurredAt: m.OccurredAt.Format(time.RFC3339),
+				Title:      m.Title,
+				ThreadID:   m.ThreadID,
 				PathMD:     m.PathMD,
 			})
 		}
@@ -478,13 +495,14 @@ func (h *Handlers) HandleGetThread() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(ThreadWithDetailsResponse{
-			Thread: ThreadResponse{
+			Thread:     ThreadResponse{
 				ID:        thread.Thread.ID,
 				Title:     thread.Thread.Title,
 				ContactID: thread.Thread.ContactID,
 			},
-			Meetings: meetings,
-			Roles:    roles,
+			Meetings:   meetings,
+			MeetingsV2: meetingsV2,
+			Roles:      roles,
 		})
 	}
 }
@@ -1815,7 +1833,7 @@ func (h *Handlers) HandleUpsertArtifactForm() http.HandlerFunc {
 			}
 			defer pdfFile.Close()
 			input.FileContent = pdfFile
-		case "text", "jsonc":
+		case "text", "jsonc", "html", "markdown":
 			if textContent == "" {
 				http.Redirect(w, r, redirectURL+"?error=Content+is+required+for+"+artifactType+"+artifacts", http.StatusSeeOther)
 				return
@@ -1869,18 +1887,67 @@ func (h *Handlers) HandleViewArtifact() http.HandlerFunc {
 		case "pdf":
 			w.Header().Set("Content-Type", "application/pdf")
 			w.Header().Set("Content-Disposition", "inline; filename=\""+name+".pdf\"")
+			w.Write(content)
 		case "jsonc":
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+			w.Write(content)
 		case "text":
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+			w.Write(content)
 		case "html":
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+			w.Write(content)
+		case "markdown":
+			// Convert markdown to HTML
+			var buf bytes.Buffer
+			if err := goldmark.Convert(content, &buf); err != nil {
+				http.Error(w, "failed to render markdown: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			// Wrap in styled HTML template
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+			w.Write([]byte(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	line-height: 1.6;
+	max-width: 800px;
+	margin: 0 auto;
+	padding: 20px;
+	color: #333;
+}
+h1, h2, h3, h4, h5, h6 { margin-top: 1.5em; margin-bottom: 0.5em; }
+h1 { font-size: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
+h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
+code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+pre { background: #f4f4f4; padding: 16px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #ddd; margin: 0; padding-left: 16px; color: #666; }
+a { color: #0366d6; }
+ul, ol { padding-left: 2em; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+th { background: #f4f4f4; }
+</style>
+</head>
+<body>
+`))
+			w.Write(buf.Bytes())
+			w.Write([]byte(`
+</body>
+</html>`))
+		default:
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Write(content)
 		}
-
-		w.Write(content)
 	}
 }
 
