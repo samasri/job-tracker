@@ -42,16 +42,6 @@ func (fs *FileStore) CreateCompanyFolder(ctx context.Context, slug string) (stri
 		return "", fmt.Errorf("creating roles folder: %w", err)
 	}
 
-	// Create meetings subfolder
-	if err := os.MkdirAll(filepath.Join(absPath, "meetings"), 0755); err != nil {
-		return "", fmt.Errorf("creating meetings folder: %w", err)
-	}
-
-	// Create resumes subfolder
-	if err := os.MkdirAll(filepath.Join(absPath, "resumes"), 0755); err != nil {
-		return "", fmt.Errorf("creating resumes folder: %w", err)
-	}
-
 	// Create company.md for notes (status is now computed from roles, not stored in file)
 	companyMDPath := filepath.Join(absPath, "company.md")
 	if _, err := os.Stat(companyMDPath); os.IsNotExist(err) {
