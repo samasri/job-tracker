@@ -1,6 +1,7 @@
 package http_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -1210,42 +1211,40 @@ func TestUI_CreateMeetingWithShortID(t *testing.T) {
 		"title": "Test Role",
 	})
 
-	// Create a role meeting via UI form (v2 API)
+	// Create a role meeting via UI form
 	meetingResp := env.PostFormFollowRedirect("/companies/ui-short-id-company/roles/test-role/meetings/new", map[string]string{
 		"title":       "UI Short ID Meeting",
 		"occurred_at": "2024-06-20T09:00",
 	})
 	env.AssertStatus(meetingResp, 200)
 
-	// Get the role to find the meeting via API
-	apiResp := env.Get("/api/companies/ui-short-id-company/roles/test-role/meetings")
-	// If there's no dedicated API endpoint for listing role meetings, use the role page
-	// For now, verify via the file system
-	roleResp := env.Get("/api/companies/ui-short-id-company")
-	env.AssertStatus(roleResp, 200)
+	// Get the role to find its ID
+	companyResp := env.Get("/api/companies/ui-short-id-company")
+	env.AssertStatus(companyResp, 200)
 
 	var companyDetails map[string]interface{}
-	env.ReadJSON(roleResp, &companyDetails)
+	env.ReadJSON(companyResp, &companyDetails)
 
 	roles := companyDetails["roles"].([]interface{})
 	if len(roles) == 0 {
 		t.Fatal("Expected at least one role")
 	}
 
-	// Get role ID and check meetings via v2 service
 	role := roles[0].(map[string]interface{})
 	roleID := role["id"].(string)
 
-	// Use the role meeting v2 API to verify
-	v2MeetingResp := env.PostJSON("/api/companies/ui-short-id-company/roles/test-role/meetings", map[string]string{
-		"occurred_at": "2024-06-21T09:00:00Z",
-		"title":       "Second Meeting for ID Check",
-	})
-	env.AssertStatus(v2MeetingResp, 201)
+	// Use the MeetingV2Service directly to get the UI-created meeting
+	ctx := context.Background()
+	meetings, err := env.MeetingV2Service.ListMeetingsByRole(ctx, roleID)
+	if err != nil {
+		t.Fatalf("Failed to list meetings: %v", err)
+	}
+	if len(meetings) == 0 {
+		t.Fatal("Expected at least one meeting created by UI form")
+	}
 
-	var meeting map[string]interface{}
-	env.ReadJSON(v2MeetingResp, &meeting)
-	meetingID := meeting["id"].(string)
+	meeting := meetings[0]
+	meetingID := meeting.ID
 
 	// Verify meeting ID is exactly 8 characters
 	if len(meetingID) != 8 {
@@ -1253,13 +1252,14 @@ func TestUI_CreateMeetingWithShortID(t *testing.T) {
 	}
 
 	// Verify the path_md ends with the short ID
-	pathMD := meeting["path_md"].(string)
-	if !strings.HasSuffix(pathMD, "_"+meetingID+".md") {
-		t.Errorf("Meeting filename should end with 8-char ID, got path: %s", pathMD)
+	if !strings.HasSuffix(meeting.PathMD, "_"+meetingID+".md") {
+		t.Errorf("Meeting filename should end with 8-char ID, got path: %s", meeting.PathMD)
 	}
 
-	_ = roleID // used for clarity
-	_ = apiResp
+	// Verify meeting title matches what was submitted via UI
+	if meeting.Title != "UI Short ID Meeting" {
+		t.Errorf("Expected meeting title 'UI Short ID Meeting', got %q", meeting.Title)
+	}
 }
 
 // R3 E2E Test: Role meeting creation (v2) creates file under role folder
