@@ -387,6 +387,51 @@ func TestSaveRoleArtifact_PDF(t *testing.T) {
 	}
 }
 
+func TestSaveRoleArtifact_PNG(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "filestore-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	fs := filestore.New(tempDir)
+	ctx := context.Background()
+
+	// Save PNG artifact (simulated PNG content - PNG magic bytes)
+	pngContent := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "Screenshot", "png", strings.NewReader(string(pngContent)))
+	if err != nil {
+		t.Fatalf("SaveRoleArtifact failed: %v", err)
+	}
+
+	// Verify path format (name should be slugified)
+	expectedPath := "data/companies/acme-corp/roles/senior-engineer/artifacts/screenshot.png"
+	if path != expectedPath {
+		t.Errorf("Expected path %q, got %q", expectedPath, path)
+	}
+
+	// Verify file exists
+	absPath := filepath.Join(tempDir, path)
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		t.Errorf("File should exist at %s", absPath)
+	}
+
+	// Verify content is preserved (binary content)
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+	if len(content) != len(pngContent) {
+		t.Errorf("Content length mismatch: expected %d, got %d", len(pngContent), len(content))
+	}
+	for i, b := range pngContent {
+		if content[i] != b {
+			t.Errorf("Content mismatch at byte %d: expected %02x, got %02x", i, b, content[i])
+			break
+		}
+	}
+}
+
 func TestSaveRoleArtifact_Overwrite(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "filestore-test-*")
 	if err != nil {

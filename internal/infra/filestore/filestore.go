@@ -272,6 +272,8 @@ func extensionForType(artifactType string) string {
 		return ".html"
 	case "markdown":
 		return ".md"
+	case "png":
+		return ".png"
 	default:
 		return ".txt"
 	}

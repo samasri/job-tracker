@@ -85,6 +85,7 @@
                     <option value="markdown">Markdown</option>
                     <option value="jsonc">JSONC (JSON with comments)</option>
                     <option value="pdf">PDF</option>
+                    <option value="png">PNG Image</option>
                 </select>
             </div>
         </div>
@@ -93,8 +94,8 @@
             <textarea id="artifact_content" name="content" placeholder="Enter text or JSONC content..."></textarea>
         </div>
         <div class="form-group" id="artifact_file_group" style="display: none;">
-            <label for="artifact_file">PDF File</label>
-            <input type="file" id="artifact_file" name="file" accept=".pdf">
+            <label for="artifact_file">File</label>
+            <input type="file" id="artifact_file" name="file" accept=".pdf,.png">
         </div>
         <button type="submit">Save Artifact</button>
     </form>
@@ -105,7 +106,7 @@ function toggleArtifactInputs() {
     var type = document.getElementById('artifact_type').value;
     var textGroup = document.getElementById('artifact_text_group');
     var fileGroup = document.getElementById('artifact_file_group');
-    if (type === 'pdf') {
+    if (type === 'pdf' || type === 'png') {
         textGroup.style.display = 'none';
         fileGroup.style.display = 'block';
     } else {

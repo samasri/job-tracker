@@ -1824,15 +1824,15 @@ func (h *Handlers) HandleUpsertArtifactForm() http.HandlerFunc {
 
 		// Handle content based on type
 		switch artifactType {
-		case "pdf":
-			// Get PDF file
-			pdfFile, _, err := r.FormFile("file")
+		case "pdf", "png":
+			// Get binary file
+			file, _, err := r.FormFile("file")
 			if err != nil {
-				http.Redirect(w, r, redirectURL+"?error=PDF+file+is+required+for+PDF+artifacts", http.StatusSeeOther)
+				http.Redirect(w, r, redirectURL+"?error=File+is+required+for+"+artifactType+"+artifacts", http.StatusSeeOther)
 				return
 			}
-			defer pdfFile.Close()
-			input.FileContent = pdfFile
+			defer file.Close()
+			input.FileContent = file
 		case "text", "jsonc", "html", "markdown":
 			if textContent == "" {
 				http.Redirect(w, r, redirectURL+"?error=Content+is+required+for+"+artifactType+"+artifacts", http.StatusSeeOther)
@@ -1887,6 +1887,10 @@ func (h *Handlers) HandleViewArtifact() http.HandlerFunc {
 		case "pdf":
 			w.Header().Set("Content-Type", "application/pdf")
 			w.Header().Set("Content-Disposition", "inline; filename=\""+name+".pdf\"")
+			w.Write(content)
+		case "png":
+			w.Header().Set("Content-Type", "image/png")
+			w.Header().Set("Content-Disposition", "inline; filename=\""+name+".png\"")
 			w.Write(content)
 		case "jsonc":
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")

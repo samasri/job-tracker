@@ -38,7 +38,7 @@ type UpsertArtifactInput struct {
 	CompanySlug string
 	RoleSlug    string
 	Name        string
-	Type        string // "pdf", "jsonc", or "text"
+	Type        string // "pdf", "png", "jsonc", "text", "html", or "markdown"
 	TextContent string // For text/jsonc types
 	FileContent io.Reader // For pdf type
 }
@@ -78,9 +78,9 @@ func (s *ArtifactService) UpsertArtifact(ctx context.Context, input UpsertArtifa
 	// Determine content source and save file
 	var contentReader io.Reader
 	switch artifactType {
-	case domain.ArtifactTypePDF:
+	case domain.ArtifactTypePDF, domain.ArtifactTypePNG:
 		if input.FileContent == nil {
-			return nil, fmt.Errorf("PDF artifacts require file upload")
+			return nil, fmt.Errorf("%s artifacts require file upload", artifactType)
 		}
 		contentReader = input.FileContent
 	case domain.ArtifactTypeJSONC, domain.ArtifactTypeText:
