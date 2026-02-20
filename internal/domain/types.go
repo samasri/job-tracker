@@ -206,6 +206,7 @@ const (
 	ArtifactTypeHTML     ArtifactType = "html"
 	ArtifactTypeMarkdown ArtifactType = "markdown"
 	ArtifactTypePNG      ArtifactType = "png"
+	ArtifactTypeFile     ArtifactType = "file"
 )
 
 // AllArtifactTypes returns all valid artifact types
@@ -217,6 +218,7 @@ func AllArtifactTypes() []ArtifactType {
 		ArtifactTypeHTML,
 		ArtifactTypeMarkdown,
 		ArtifactTypePNG,
+		ArtifactTypeFile,
 	}
 }
 
@@ -233,7 +235,7 @@ func ParseArtifactType(s string) (ArtifactType, error) {
 			return t, nil
 		}
 	}
-	return "", fmt.Errorf("invalid artifact type: %q (must be pdf, jsonc, text, html, markdown, or png)", s)
+	return "", fmt.Errorf("invalid artifact type: %q (must be pdf, jsonc, text, html, markdown, png, or file)", s)
 }
 
 // IsValid returns true if the type is a valid artifact type
@@ -242,7 +244,8 @@ func (t ArtifactType) IsValid() bool {
 	return err == nil
 }
 
-// Extension returns the file extension for this artifact type
+// Extension returns the file extension for this artifact type.
+// Returns empty string for ArtifactTypeFile since extension is determined by the uploaded file.
 func (t ArtifactType) Extension() string {
 	switch t {
 	case ArtifactTypePDF:
@@ -257,6 +260,8 @@ func (t ArtifactType) Extension() string {
 		return ".md"
 	case ArtifactTypePNG:
 		return ".png"
+	case ArtifactTypeFile:
+		return ""
 	default:
 		return ".txt"
 	}

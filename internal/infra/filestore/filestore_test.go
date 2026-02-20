@@ -283,7 +283,7 @@ func TestSaveRoleArtifact_Text(t *testing.T) {
 
 	// Save text artifact
 	textContent := strings.NewReader("This is a job description in plain text.")
-	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "job-description", "text", textContent)
+	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "job-description", "text", "", textContent)
 	if err != nil {
 		t.Fatalf("SaveRoleArtifact failed: %v", err)
 	}
@@ -326,7 +326,7 @@ func TestSaveRoleArtifact_JSONC(t *testing.T) {
   "name": "John Doe",
   "skills": ["Go", "TypeScript"], // inline comment
 }`
-	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "resume", "jsonc", strings.NewReader(jsoncContent))
+	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "resume", "jsonc", "", strings.NewReader(jsoncContent))
 	if err != nil {
 		t.Fatalf("SaveRoleArtifact failed: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestSaveRoleArtifact_PDF(t *testing.T) {
 
 	// Save PDF artifact
 	pdfContent := strings.NewReader("%PDF-1.4 fake pdf content for resume")
-	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "Resume PDF", "pdf", pdfContent)
+	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "Resume PDF", "pdf", "", pdfContent)
 	if err != nil {
 		t.Fatalf("SaveRoleArtifact failed: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestSaveRoleArtifact_PNG(t *testing.T) {
 
 	// Save PNG artifact (simulated PNG content - PNG magic bytes)
 	pngContent := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
-	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "Screenshot", "png", strings.NewReader(string(pngContent)))
+	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "Screenshot", "png", "", strings.NewReader(string(pngContent)))
 	if err != nil {
 		t.Fatalf("SaveRoleArtifact failed: %v", err)
 	}
@@ -443,13 +443,13 @@ func TestSaveRoleArtifact_Overwrite(t *testing.T) {
 	ctx := context.Background()
 
 	// Save initial artifact
-	path1, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "notes", "text", strings.NewReader("version 1"))
+	path1, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "notes", "text", "", strings.NewReader("version 1"))
 	if err != nil {
 		t.Fatalf("First SaveRoleArtifact failed: %v", err)
 	}
 
 	// Save updated artifact (should overwrite)
-	path2, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "notes", "text", strings.NewReader("version 2"))
+	path2, err := fs.SaveRoleArtifact(ctx, "acme-corp", "senior-engineer", "notes", "text", "", strings.NewReader("version 2"))
 	if err != nil {
 		t.Fatalf("Second SaveRoleArtifact failed: %v", err)
 	}
@@ -482,7 +482,7 @@ func TestReadFileBytes(t *testing.T) {
 
 	// Save an artifact first
 	originalContent := "test content for reading"
-	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "dev", "test-file", "text", strings.NewReader(originalContent))
+	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "dev", "test-file", "text", "", strings.NewReader(originalContent))
 	if err != nil {
 		t.Fatalf("SaveRoleArtifact failed: %v", err)
 	}
@@ -509,7 +509,7 @@ func TestDeleteFile(t *testing.T) {
 	ctx := context.Background()
 
 	// Save an artifact
-	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "dev", "to-delete", "text", strings.NewReader("delete me"))
+	path, err := fs.SaveRoleArtifact(ctx, "acme-corp", "dev", "to-delete", "text", "", strings.NewReader("delete me"))
 	if err != nil {
 		t.Fatalf("SaveRoleArtifact failed: %v", err)
 	}

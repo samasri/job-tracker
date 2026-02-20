@@ -274,22 +274,27 @@ func extensionForType(artifactType string) string {
 		return ".md"
 	case "png":
 		return ".png"
+	case "file":
+		return ""
 	default:
 		return ".txt"
 	}
 }
 
 // SaveRoleArtifact saves an artifact file for a role
-func (fs *FileStore) SaveRoleArtifact(ctx context.Context, companySlug, roleSlug, artifactName, artifactType string, content io.Reader) (string, error) {
-	// Create artifacts folder if it doesn't exist
+func (fs *FileStore) SaveRoleArtifact(ctx context.Context, companySlug, roleSlug, artifactName, artifactType, fileExtension string, content io.Reader) (string, error) {
 	artifactsDir := filepath.Join("data", "companies", companySlug, "roles", roleSlug, "artifacts")
 	absArtifactsDir := filepath.Join(fs.repoRoot, artifactsDir)
 	if err := os.MkdirAll(absArtifactsDir, 0755); err != nil {
 		return "", fmt.Errorf("creating artifacts folder: %w", err)
 	}
 
-	// Generate filename from slugified name + extension
-	filename := slugify(artifactName) + extensionForType(artifactType)
+	ext := extensionForType(artifactType)
+	if artifactType == "file" && fileExtension != "" {
+		ext = fileExtension
+	}
+
+	filename := slugify(artifactName) + ext
 	filePath := filepath.Join(artifactsDir, filename)
 	absPath := filepath.Join(fs.repoRoot, filePath)
 

@@ -39,10 +39,9 @@ type FileStore interface {
 	// SaveRoleResumePDF saves the resume PDF for a role
 	SaveRoleResumePDF(ctx context.Context, companySlug, roleSlug string, content io.Reader) (filePath string, err error)
 
-	// SaveRoleArtifact saves an artifact file for a role
-	// artifactType should be "pdf", "jsonc", or "text"
-	// Returns the relative path to the saved file
-	SaveRoleArtifact(ctx context.Context, companySlug, roleSlug, artifactName, artifactType string, content io.Reader) (filePath string, err error)
+	// SaveRoleArtifact saves an artifact file for a role.
+	// fileExtension is used when artifactType is "file" to preserve the original extension.
+	SaveRoleArtifact(ctx context.Context, companySlug, roleSlug, artifactName, artifactType, fileExtension string, content io.Reader) (filePath string, err error)
 
 	// ReadFileBytes reads the raw bytes of a file at the given relative path
 	ReadFileBytes(ctx context.Context, path string) ([]byte, error)

@@ -35,12 +35,13 @@ func NewArtifactService(
 
 // UpsertArtifactInput is the input for creating or updating an artifact
 type UpsertArtifactInput struct {
-	CompanySlug string
-	RoleSlug    string
-	Name        string
-	Type        string // "pdf", "png", "jsonc", "text", "html", or "markdown"
-	TextContent string // For text/jsonc types
-	FileContent io.Reader // For pdf type
+	CompanySlug   string
+	RoleSlug      string
+	Name          string
+	Type          string
+	TextContent   string
+	FileContent   io.Reader
+	FileExtension string
 }
 
 // UpsertArtifact creates or updates an artifact for a role
@@ -75,7 +76,6 @@ func (s *ArtifactService) UpsertArtifact(ctx context.Context, input UpsertArtifa
 		return nil, fmt.Errorf("role '%s' not found for company '%s'", input.RoleSlug, input.CompanySlug)
 	}
 
-	// Determine content source and save file
 	var contentReader io.Reader
 	switch artifactType {
 	case domain.ArtifactTypePDF, domain.ArtifactTypePNG:
@@ -83,15 +83,22 @@ func (s *ArtifactService) UpsertArtifact(ctx context.Context, input UpsertArtifa
 			return nil, fmt.Errorf("%s artifacts require file upload", artifactType)
 		}
 		contentReader = input.FileContent
-	case domain.ArtifactTypeJSONC, domain.ArtifactTypeText:
+	case domain.ArtifactTypeJSONC, domain.ArtifactTypeText, domain.ArtifactTypeHTML, domain.ArtifactTypeMarkdown:
 		if strings.TrimSpace(input.TextContent) == "" {
 			return nil, fmt.Errorf("%s artifacts require text content", artifactType)
 		}
 		contentReader = strings.NewReader(input.TextContent)
+	case domain.ArtifactTypeFile:
+		if input.FileContent == nil {
+			return nil, fmt.Errorf("file artifacts require file upload")
+		}
+		if input.FileExtension == "" {
+			return nil, fmt.Errorf("file artifacts require file extension")
+		}
+		contentReader = input.FileContent
 	}
 
-	// Save file to disk
-	path, err := s.fileStore.SaveRoleArtifact(ctx, input.CompanySlug, input.RoleSlug, name, string(artifactType), contentReader)
+	path, err := s.fileStore.SaveRoleArtifact(ctx, input.CompanySlug, input.RoleSlug, name, string(artifactType), input.FileExtension, contentReader)
 	if err != nil {
 		return nil, fmt.Errorf("saving artifact file: %w", err)
 	}

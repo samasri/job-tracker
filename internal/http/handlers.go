@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -1822,10 +1823,8 @@ func (h *Handlers) HandleUpsertArtifactForm() http.HandlerFunc {
 			Type:        artifactType,
 		}
 
-		// Handle content based on type
 		switch artifactType {
 		case "pdf", "png":
-			// Get binary file
 			file, _, err := r.FormFile("file")
 			if err != nil {
 				http.Redirect(w, r, redirectURL+"?error=File+is+required+for+"+artifactType+"+artifacts", http.StatusSeeOther)
@@ -1839,6 +1838,15 @@ func (h *Handlers) HandleUpsertArtifactForm() http.HandlerFunc {
 				return
 			}
 			input.TextContent = textContent
+		case "file":
+			file, header, err := r.FormFile("file")
+			if err != nil {
+				http.Redirect(w, r, redirectURL+"?error=File+is+required+for+file+artifacts", http.StatusSeeOther)
+				return
+			}
+			defer file.Close()
+			input.FileContent = file
+			input.FileExtension = filepath.Ext(header.Filename)
 		default:
 			http.Redirect(w, r, redirectURL+"?error=Invalid+artifact+type", http.StatusSeeOther)
 			return
@@ -1948,6 +1956,11 @@ th { background: #f4f4f4; }
 			w.Write([]byte(`
 </body>
 </html>`))
+		case "file":
+			ext := filepath.Ext(artifact.Path)
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Disposition", "attachment; filename=\""+name+ext+"\"")
+			w.Write(content)
 		default:
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.Write(content)

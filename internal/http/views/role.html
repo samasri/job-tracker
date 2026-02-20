@@ -86,6 +86,7 @@
                     <option value="jsonc">JSONC (JSON with comments)</option>
                     <option value="pdf">PDF</option>
                     <option value="png">PNG Image</option>
+                    <option value="file">File (any type)</option>
                 </select>
             </div>
         </div>
@@ -106,9 +107,11 @@ function toggleArtifactInputs() {
     var type = document.getElementById('artifact_type').value;
     var textGroup = document.getElementById('artifact_text_group');
     var fileGroup = document.getElementById('artifact_file_group');
-    if (type === 'pdf' || type === 'png') {
+    var fileInput = document.getElementById('artifact_file');
+    if (type === 'pdf' || type === 'png' || type === 'file') {
         textGroup.style.display = 'none';
         fileGroup.style.display = 'block';
+        fileInput.accept = type === 'file' ? '' : '.' + type;
     } else {
         textGroup.style.display = 'block';
         fileGroup.style.display = 'none';
