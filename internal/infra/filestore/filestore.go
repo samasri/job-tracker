@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var (
@@ -162,6 +163,66 @@ occurred_at: %s
 	}
 
 	return filePath, nil
+}
+
+// CreateContactFolder creates the contact folder
+func (fs *FileStore) CreateContactFolder(ctx context.Context, slug string) (string, error) {
+	folderPath := filepath.Join("data", "contacts", slug)
+	absPath := filepath.Join(fs.repoRoot, folderPath)
+
+	if err := os.MkdirAll(absPath, 0755); err != nil {
+		return "", fmt.Errorf("creating contact folder: %w", err)
+	}
+
+	return folderPath, nil
+}
+
+// CreateContactMeetingNote creates a meeting note file for a contact meeting
+// Path: data/contacts/<slug>/<YYYY-MM-DD>_<title>_<id>.md
+func (fs *FileStore) CreateContactMeetingNote(ctx context.Context, contactSlug string, occurredAt time.Time, title, meetingID string) (string, error) {
+	safeTitle := strings.ReplaceAll(title, " ", "-")
+	safeTitle = strings.ReplaceAll(safeTitle, "/", "-")
+	filename := fmt.Sprintf("%s_%s_%s.md", occurredAt.Format("2006-01-02"), safeTitle, meetingID)
+
+	contactDir := filepath.Join("data", "contacts", contactSlug)
+	absContactDir := filepath.Join(fs.repoRoot, contactDir)
+	if err := os.MkdirAll(absContactDir, 0755); err != nil {
+		return "", fmt.Errorf("creating contact folder: %w", err)
+	}
+
+	filePath := filepath.Join(contactDir, filename)
+	absPath := filepath.Join(fs.repoRoot, filePath)
+
+	content := fmt.Sprintf(`# %s
+
+meeting_id: %s
+occurred_at: %s
+
+## Notes
+
+`, title, meetingID, occurredAt.Format("2006-01-02T15:04:05Z07:00"))
+
+	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("creating contact meeting note: %w", err)
+	}
+
+	return filePath, nil
+}
+
+// MoveFile moves a file from oldPath to newPath (both relative to repoRoot)
+func (fs *FileStore) MoveFile(ctx context.Context, oldPath, newPath string) error {
+	absOld := filepath.Join(fs.repoRoot, oldPath)
+	absNew := filepath.Join(fs.repoRoot, newPath)
+
+	if err := os.MkdirAll(filepath.Dir(absNew), 0755); err != nil {
+		return fmt.Errorf("creating parent directory for move: %w", err)
+	}
+
+	if err := os.Rename(absOld, absNew); err != nil {
+		return fmt.Errorf("moving file from %s to %s: %w", oldPath, newPath, err)
+	}
+
+	return nil
 }
 
 // SaveJobDescriptionHTML saves the HTML job description

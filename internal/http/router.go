@@ -47,19 +47,19 @@ func (s *Server) routes() {
 
 		// Contacts
 		r.Post("/contacts", s.handlers.HandleCreateContact())
+		r.Get("/contacts/{id}", s.handlers.HandleGetContactAPI())
+		r.Post("/contacts/{id}/roles", s.handlers.HandleLinkRoleToContactAPI())
+		r.Post("/contacts/{id}/meetings", s.handlers.HandleCreateContactMeetingAPI())
 
-		// Threads
+		// Threads (read-only; meetings and role-linking removed)
 		r.Post("/threads", s.handlers.HandleCreateThread())
 		r.Get("/threads/{id}", s.handlers.HandleGetThread())
-		r.Post("/threads/{id}/roles", s.handlers.HandleLinkRole())
 
 		// Meetings (legacy)
 		r.Post("/meetings", s.handlers.HandleCreateMeeting())
 
 		// Meetings V2 - role meetings
 		r.Post("/companies/{companySlug}/roles/{roleSlug}/meetings", s.handlers.HandleCreateRoleMeetingV2())
-		// Meetings V2 - thread-only meetings
-		r.Post("/threads/{id}/meetings", s.handlers.HandleCreateThreadMeetingV2())
 
 		// Job Descriptions
 		r.Post("/roles/{companySlug}/{roleSlug}/jd", s.handlers.HandleAttachJD())
@@ -88,13 +88,19 @@ func (s *Server) routes() {
 	s.router.Get("/companies/{companySlug}/roles/{roleSlug}/artifacts/{name}", s.handlers.HandleViewArtifact())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/artifacts/{name}/delete", s.handlers.HandleDeleteArtifact())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/meetings/new", s.handlers.HandleCreateRoleMeetingV2Form())
-	s.router.Get("/threads", s.handlers.HandleThreadsPage())
-	s.router.Post("/threads/new", s.handlers.HandleCreateThreadForm())
+	// /threads/* redirect to /contacts/*
+	s.router.Get("/threads", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/contacts", http.StatusMovedPermanently)
+	})
+	s.router.Post("/threads/new", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/contacts", http.StatusSeeOther)
+	})
 	s.router.Get("/threads/{id}", s.handlers.HandleThreadPage())
-	s.router.Post("/threads/{id}/roles/link", s.handlers.HandleLinkRoleForm())
-	s.router.Post("/threads/{id}/meetings/new", s.handlers.HandleCreateMeetingFromThreadForm())
-	s.router.Post("/threads/{id}/meetings/v2/new", s.handlers.HandleCreateThreadMeetingV2Form())
+	s.router.Get("/contacts", s.handlers.HandleContactsPage())
 	s.router.Post("/contacts/new", s.handlers.HandleCreateContactForm())
+	s.router.Get("/contacts/{id}", s.handlers.HandleContactPage())
+	s.router.Post("/contacts/{id}/roles/link", s.handlers.HandleLinkRoleToContactForm())
+	s.router.Post("/contacts/{id}/meetings/new", s.handlers.HandleCreateContactMeetingForm())
 	s.router.Post("/export", s.handlers.HandleExportPage())
 }
 

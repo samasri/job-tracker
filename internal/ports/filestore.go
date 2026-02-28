@@ -3,6 +3,7 @@ package ports
 import (
 	"context"
 	"io"
+	"time"
 )
 
 // FileStore defines operations for artifact storage on filesystem
@@ -23,6 +24,17 @@ type FileStore interface {
 	// CreateThreadMeetingNote creates a meeting note file for a thread-only meeting (meetings_v2)
 	// Path: data/threads/<thread-slug>/<YYYY-MM-DD>_<title>_<id>.md (flattened, no /meetings subfolder)
 	CreateThreadMeetingNote(ctx context.Context, threadSlug, occurredAt, title, meetingID string) (filePath string, err error)
+
+	// CreateContactFolder creates the contact folder structure
+	// Path: data/contacts/<slug>/
+	CreateContactFolder(ctx context.Context, slug string) (folderPath string, err error)
+
+	// CreateContactMeetingNote creates a meeting note file for a contact meeting
+	// Path: data/contacts/<slug>/<YYYY-MM-DD>_<title>_<id>.md
+	CreateContactMeetingNote(ctx context.Context, contactSlug string, occurredAt time.Time, title, meetingID string) (filePath string, err error)
+
+	// MoveFile moves a file from oldPath to newPath (relative paths)
+	MoveFile(ctx context.Context, oldPath, newPath string) error
 
 	// SaveJobDescriptionHTML saves the HTML job description
 	SaveJobDescriptionHTML(ctx context.Context, companySlug, roleSlug string, content string) (filePath string, err error)

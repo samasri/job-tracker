@@ -182,6 +182,9 @@ type Contact struct {
 	Org         string
 	LinkedInURL string
 	Email       string
+	Code        string
+	Slug        string
+	FolderPath  string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -224,16 +227,14 @@ type RoleResume struct {
 }
 
 // MeetingV2 represents a meeting in the new model where a meeting belongs to
-// exactly one of: Role OR Thread (XOR constraint).
-// - Role meeting: belongs to a Role, has no direct thread association
-// - Thread-only meeting: belongs to a Thread, has no company/role association
+// exactly one of: Role OR Contact (XOR constraint).
 type MeetingV2 struct {
 	ID         string
 	OccurredAt time.Time
 	Title      string
-	RoleID     string // Set for role meetings, empty for thread-only meetings
-	ThreadID   string // Set for thread-only meetings, empty for role meetings
-	PathMD     string // relative path to markdown file
+	RoleID    string // Set for role meetings
+	ContactID string // Set for contact meetings
+	PathMD    string // relative path to markdown file
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
@@ -243,9 +244,9 @@ func (m *MeetingV2) IsRoleMeeting() bool {
 	return m.RoleID != ""
 }
 
-// IsThreadMeeting returns true if this is a thread-only meeting
-func (m *MeetingV2) IsThreadMeeting() bool {
-	return m.ThreadID != ""
+// IsContactMeeting returns true if this is a contact meeting
+func (m *MeetingV2) IsContactMeeting() bool {
+	return m.ContactID != ""
 }
 
 // ArtifactType represents the type of artifact content

@@ -24,7 +24,7 @@ func New() (*Views, error) {
 	templates := make(map[string]*template.Template)
 
 	// Parse each page template with the layout
-	pages := []string{"companies", "company", "thread", "threads", "role", "jd_viewer"}
+	pages := []string{"companies", "company", "thread", "threads", "role", "jd_viewer", "contacts", "contact"}
 	for _, page := range pages {
 		tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "layout.html", page+".html")
 		if err != nil {

@@ -98,18 +98,22 @@ type MeetingV2Response struct {
 	ID         string `json:"id"`
 	OccurredAt string `json:"occurred_at"`
 	Title      string `json:"title"`
-	RoleID     string `json:"role_id,omitempty"`
-	ThreadID   string `json:"thread_id,omitempty"`
+	RoleID    string `json:"role_id,omitempty"`
+	ContactID string `json:"contact_id,omitempty"`
 	PathMD     string `json:"path_md"`
 }
 
 // ContactResponse is the response for a contact
 type ContactResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Org         string `json:"org,omitempty"`
-	LinkedInURL string `json:"linkedin_url,omitempty"`
-	Email       string `json:"email,omitempty"`
+	ID          string             `json:"id"`
+	Name        string             `json:"name"`
+	Org         string             `json:"org,omitempty"`
+	LinkedInURL string             `json:"linkedin_url,omitempty"`
+	Email       string             `json:"email,omitempty"`
+	Code        string             `json:"code,omitempty"`
+	Slug        string             `json:"slug,omitempty"`
+	FolderPath  string             `json:"folder_path,omitempty"`
+	Roles       []RoleWithCompanyResponse `json:"roles,omitempty"`
 }
 
 // ThreadResponse is the response for a thread
@@ -388,6 +392,140 @@ func (h *Handlers) HandleCreateContact() http.HandlerFunc {
 			Org:         contact.Org,
 			LinkedInURL: contact.LinkedInURL,
 			Email:       contact.Email,
+			Code:        contact.Code,
+			Slug:        contact.Slug,
+			FolderPath:  contact.FolderPath,
+		})
+	}
+}
+
+// HandleGetContactAPI handles GET /api/contacts/{id}
+func (h *Handlers) HandleGetContactAPI() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+
+		details, err := h.contactService.GetContactWithDetails(r.Context(), id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if details == nil {
+			http.Error(w, "contact not found", http.StatusNotFound)
+			return
+		}
+
+		roles := make([]RoleWithCompanyResponse, 0, len(details.Roles))
+		for _, rc := range details.Roles {
+			roles = append(roles, RoleWithCompanyResponse{
+				Role: RoleResponse{
+					ID:         rc.Role.ID,
+					CompanyID:  rc.Role.CompanyID,
+					Slug:       rc.Role.Slug,
+					Title:      rc.Role.Title,
+					FolderPath: rc.Role.FolderPath,
+				},
+				Company: CompanyResponse{
+					ID:         rc.Company.ID,
+					Slug:       rc.Company.Slug,
+					Name:       rc.Company.Name,
+					FolderPath: rc.Company.FolderPath,
+				},
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ContactResponse{
+			ID:          details.Contact.ID,
+			Name:        details.Contact.Name,
+			Org:         details.Contact.Org,
+			LinkedInURL: details.Contact.LinkedInURL,
+			Email:       details.Contact.Email,
+			Code:        details.Contact.Code,
+			Slug:        details.Contact.Slug,
+			FolderPath:  details.Contact.FolderPath,
+			Roles:       roles,
+		})
+	}
+}
+
+// LinkContactRoleRequest is the request body for linking a role to a contact
+type LinkContactRoleRequest struct {
+	RoleRef string `json:"role_ref"` // Format: "companySlug/roleSlug"
+}
+
+// HandleLinkRoleToContactAPI handles POST /api/contacts/{id}/roles
+func (h *Handlers) HandleLinkRoleToContactAPI() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		contactID := chi.URLParam(r, "id")
+
+		var req LinkContactRoleRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if req.RoleRef == "" {
+			http.Error(w, "role_ref is required", http.StatusBadRequest)
+			return
+		}
+
+		parts := splitRoleRef(req.RoleRef)
+		if len(parts) != 2 {
+			http.Error(w, "role_ref must be in format 'companySlug/roleSlug'", http.StatusBadRequest)
+			return
+		}
+
+		err := h.contactService.LinkRole(r.Context(), app.LinkContactRoleInput{
+			ContactID:   contactID,
+			CompanySlug: parts[0],
+			RoleSlug:    parts[1],
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// CreateContactMeetingRequest is the request body for creating a contact meeting
+type CreateContactMeetingRequest struct {
+	OccurredAt string `json:"occurred_at"`
+	Title      string `json:"title"`
+}
+
+// HandleCreateContactMeetingAPI handles POST /api/contacts/{id}/meetings
+func (h *Handlers) HandleCreateContactMeetingAPI() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		contactID := chi.URLParam(r, "id")
+
+		var req CreateContactMeetingRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if req.Title == "" || req.OccurredAt == "" {
+			http.Error(w, "title and occurred_at are required", http.StatusBadRequest)
+			return
+		}
+
+		meeting, err := h.meetingV2Service.CreateContactMeeting(r.Context(), app.CreateContactMeetingInput{
+			ContactID:  contactID,
+			OccurredAt: req.OccurredAt,
+			Title:      req.Title,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(MeetingV2Response{
+			ID:         meeting.ID,
+			OccurredAt: meeting.OccurredAt.Format(time.RFC3339),
+			Title:      meeting.Title,
+			PathMD:     meeting.PathMD,
 		})
 	}
 }
@@ -463,91 +601,17 @@ func (h *Handlers) HandleGetThread() http.HandlerFunc {
 			})
 		}
 
-		// V2 thread meetings
-		threadMeetings, _ := h.meetingV2Service.ListMeetingsByThread(r.Context(), id)
-		meetingsV2 := make([]MeetingV2Response, 0, len(threadMeetings))
-		for _, m := range threadMeetings {
-			meetingsV2 = append(meetingsV2, MeetingV2Response{
-				ID:         m.ID,
-				OccurredAt: m.OccurredAt.Format(time.RFC3339),
-				Title:      m.Title,
-				ThreadID:   m.ThreadID,
-				PathMD:     m.PathMD,
-			})
-		}
-
-		roles := make([]RoleWithCompanyResponse, 0, len(thread.Roles))
-		for _, rc := range thread.Roles {
-			roles = append(roles, RoleWithCompanyResponse{
-				Role: RoleResponse{
-					ID:         rc.Role.ID,
-					CompanyID:  rc.Role.CompanyID,
-					Slug:       rc.Role.Slug,
-					Title:      rc.Role.Title,
-					FolderPath: rc.Role.FolderPath,
-				},
-				Company: CompanyResponse{
-					ID:         rc.Company.ID,
-					Slug:       rc.Company.Slug,
-					Name:       rc.Company.Name,
-					FolderPath: rc.Company.FolderPath,
-				},
-			})
-		}
-
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(ThreadWithDetailsResponse{
-			Thread:     ThreadResponse{
+			Thread: ThreadResponse{
 				ID:        thread.Thread.ID,
 				Title:     thread.Thread.Title,
 				ContactID: thread.Thread.ContactID,
 			},
 			Meetings:   meetings,
-			MeetingsV2: meetingsV2,
-			Roles:      roles,
+			MeetingsV2: []MeetingV2Response{},
+			Roles:      []RoleWithCompanyResponse{},
 		})
-	}
-}
-
-// LinkRoleRequest is the request body for linking a role to a thread
-type LinkRoleRequest struct {
-	RoleRef string `json:"role_ref"` // Format: "companySlug/roleSlug"
-}
-
-// HandleLinkRole handles POST /api/threads/{id}/roles
-func (h *Handlers) HandleLinkRole() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		threadID := chi.URLParam(r, "id")
-
-		var req LinkRoleRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		if req.RoleRef == "" {
-			http.Error(w, "role_ref is required", http.StatusBadRequest)
-			return
-		}
-
-		// Parse role_ref (format: "companySlug/roleSlug")
-		parts := splitRoleRef(req.RoleRef)
-		if len(parts) != 2 {
-			http.Error(w, "role_ref must be in format 'companySlug/roleSlug'", http.StatusBadRequest)
-			return
-		}
-
-		err := h.threadService.LinkRole(r.Context(), app.LinkRoleInput{
-			ThreadID:    threadID,
-			CompanySlug: parts[0],
-			RoleSlug:    parts[1],
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
@@ -792,9 +856,6 @@ func (h *Handlers) HandleCompanyPage() http.HandlerFunc {
 			return
 		}
 
-		// Get threads for the meeting form dropdown
-		threads, _ := h.threadService.ListThreads(r.Context())
-
 		// Check for success/error query params
 		successMsg := r.URL.Query().Get("success")
 		errorMsg := r.URL.Query().Get("error")
@@ -805,7 +866,6 @@ func (h *Handlers) HandleCompanyPage() http.HandlerFunc {
 			"Roles":    company.Roles,
 			"Meetings": company.Meetings,
 			"Status":   company.Status.String(),
-			"Threads":  threads,
 			"Success":  successMsg,
 			"Error":    errorMsg,
 		}
@@ -817,86 +877,18 @@ func (h *Handlers) HandleCompanyPage() http.HandlerFunc {
 	}
 }
 
-// HandleThreadPage handles GET /threads/{id} (HTML page)
+// HandleThreadPage redirects GET /threads/{id} to the owning contact's page (or /contacts).
 func (h *Handlers) HandleThreadPage() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 
 		thread, err := h.threadService.GetThread(r.Context(), id)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if thread == nil {
-			http.Error(w, "thread not found", http.StatusNotFound)
+		if err == nil && thread != nil && thread.Thread.ContactID != "" {
+			http.Redirect(w, r, "/contacts/"+thread.Thread.ContactID, http.StatusFound)
 			return
 		}
 
-		// Get thread-only meetings from meetings_v2
-		threadMeetings, err := h.meetingV2Service.ListMeetingsByThread(r.Context(), id)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Get role meetings from linked roles (meetings_v2)
-		// Group by role for display
-		type RoleMeetingsGroup struct {
-			Role     *domain.Role
-			Company  *domain.Company
-			Meetings []*domain.MeetingV2
-		}
-		var roleMeetingsGroups []RoleMeetingsGroup
-		for _, roleWithCompany := range thread.Roles {
-			meetings, err := h.meetingV2Service.ListMeetingsByRole(r.Context(), roleWithCompany.Role.ID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			roleMeetingsGroups = append(roleMeetingsGroups, RoleMeetingsGroup{
-				Role:     roleWithCompany.Role,
-				Company:  roleWithCompany.Company,
-				Meetings: meetings,
-			})
-		}
-
-		// Get all roles for the link role dropdown
-		allRoles := h.getAllRolesForDropdown(r.Context())
-
-		// Get all companies for the legacy meeting form
-		companies, _ := h.companyService.ListCompanies(r.Context())
-		var companyList []struct {
-			Slug string
-			Name string
-		}
-		for _, c := range companies {
-			companyList = append(companyList, struct {
-				Slug string
-				Name string
-			}{Slug: c.Company.Slug, Name: c.Company.Name})
-		}
-
-		// Check for success/error query params
-		successMsg := r.URL.Query().Get("success")
-		errorMsg := r.URL.Query().Get("error")
-
-		data := map[string]interface{}{
-			"Title":              thread.Thread.Title,
-			"Thread":             thread.Thread,
-			"Meetings":           thread.Meetings, // Legacy meetings for backward compatibility
-			"ThreadMeetings":     threadMeetings,  // Thread-only meetings (v2)
-			"RoleMeetingsGroups": roleMeetingsGroups,
-			"Roles":              thread.Roles,
-			"AllRoles":           allRoles,
-			"Companies":          companyList,
-			"Success":            successMsg,
-			"Error":              errorMsg,
-		}
-
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := h.views.Render(w, "thread", data); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		http.Redirect(w, r, "/contacts", http.StatusFound)
 	}
 }
 
@@ -1153,11 +1145,173 @@ func (h *Handlers) HandleThreadsPage() http.HandlerFunc {
 	}
 }
 
+// HandleContactsPage handles GET /contacts (HTML page)
+func (h *Handlers) HandleContactsPage() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		contacts, err := h.contactService.ListContacts(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		successMsg := r.URL.Query().Get("success")
+		errorMsg := r.URL.Query().Get("error")
+
+		data := map[string]interface{}{
+			"Title":    "Contacts",
+			"Contacts": contacts,
+			"Success":  successMsg,
+			"Error":    errorMsg,
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := h.views.Render(w, "contacts", data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}
+}
+
+// HandleContactPage handles GET /contacts/{id} (HTML page)
+func (h *Handlers) HandleContactPage() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+
+		details, err := h.contactService.GetContactWithDetails(r.Context(), id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if details == nil {
+			http.Error(w, "contact not found", http.StatusNotFound)
+			return
+		}
+
+		// Get contact meetings
+		contactMeetings, err := h.meetingV2Service.ListMeetingsByContact(r.Context(), id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Get role meetings grouped by role
+		type RoleMeetingsGroup struct {
+			Role     *domain.Role
+			Company  *domain.Company
+			Meetings []*domain.MeetingV2
+		}
+		var roleMeetingsGroups []RoleMeetingsGroup
+		for _, rc := range details.Roles {
+			meetings, err := h.meetingV2Service.ListMeetingsByRole(r.Context(), rc.Role.ID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			roleMeetingsGroups = append(roleMeetingsGroups, RoleMeetingsGroup{
+				Role:     rc.Role,
+				Company:  rc.Company,
+				Meetings: meetings,
+			})
+		}
+
+		allRoles := h.getAllRolesForDropdown(r.Context())
+
+		successMsg := r.URL.Query().Get("success")
+		errorMsg := r.URL.Query().Get("error")
+
+		data := map[string]interface{}{
+			"Title":              details.Contact.Name,
+			"Contact":            details.Contact,
+			"Roles":              details.Roles,
+			"Meetings":           contactMeetings,
+			"RoleMeetingsGroups": roleMeetingsGroups,
+			"AllRoles":           allRoles,
+			"Success":            successMsg,
+			"Error":              errorMsg,
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := h.views.Render(w, "contact", data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}
+}
+
+// HandleLinkRoleToContactForm handles POST /contacts/{id}/roles/link (HTML form)
+func (h *Handlers) HandleLinkRoleToContactForm() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		contactID := chi.URLParam(r, "id")
+
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, "/contacts/"+contactID+"?error=Invalid+form+data", http.StatusSeeOther)
+			return
+		}
+
+		roleRef := r.FormValue("role_ref")
+		if roleRef == "" {
+			http.Redirect(w, r, "/contacts/"+contactID+"?error=Role+is+required", http.StatusSeeOther)
+			return
+		}
+
+		parts := splitRoleRef(roleRef)
+		if len(parts) != 2 {
+			http.Redirect(w, r, "/contacts/"+contactID+"?error=Invalid+role+reference", http.StatusSeeOther)
+			return
+		}
+
+		err := h.contactService.LinkRole(r.Context(), app.LinkContactRoleInput{
+			ContactID:   contactID,
+			CompanySlug: parts[0],
+			RoleSlug:    parts[1],
+		})
+		if err != nil {
+			http.Redirect(w, r, "/contacts/"+contactID+"?error="+err.Error(), http.StatusSeeOther)
+			return
+		}
+
+		http.Redirect(w, r, "/contacts/"+contactID+"?success=Role+linked", http.StatusSeeOther)
+	}
+}
+
+// HandleCreateContactMeetingForm handles POST /contacts/{id}/meetings/new (HTML form)
+func (h *Handlers) HandleCreateContactMeetingForm() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		contactID := chi.URLParam(r, "id")
+		redirectURL := "/contacts/" + contactID
+
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, redirectURL+"?error=Failed+to+parse+form", http.StatusSeeOther)
+			return
+		}
+
+		title := r.FormValue("title")
+		occurredAt := r.FormValue("occurred_at")
+
+		if title == "" || occurredAt == "" {
+			http.Redirect(w, r, redirectURL+"?error=Title+and+date+are+required", http.StatusSeeOther)
+			return
+		}
+
+		occurredAtRFC := occurredAt + ":00Z"
+
+		_, err := h.meetingV2Service.CreateContactMeeting(r.Context(), app.CreateContactMeetingInput{
+			ContactID:  contactID,
+			OccurredAt: occurredAtRFC,
+			Title:      title,
+		})
+		if err != nil {
+			http.Redirect(w, r, redirectURL+"?error="+err.Error(), http.StatusSeeOther)
+			return
+		}
+
+		http.Redirect(w, r, redirectURL+"?success=Meeting+created", http.StatusSeeOther)
+	}
+}
+
 // HandleCreateContactForm handles POST /contacts/new (HTML form)
 func (h *Handlers) HandleCreateContactForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			http.Redirect(w, r, "/threads?error=Invalid+form+data", http.StatusSeeOther)
+			http.Redirect(w, r, "/contacts?error=Invalid+form+data", http.StatusSeeOther)
 			return
 		}
 
@@ -1167,7 +1321,7 @@ func (h *Handlers) HandleCreateContactForm() http.HandlerFunc {
 		linkedinURL := r.FormValue("linkedin_url")
 
 		if name == "" {
-			http.Redirect(w, r, "/threads?error=Name+is+required", http.StatusSeeOther)
+			http.Redirect(w, r, "/contacts?error=Name+is+required", http.StatusSeeOther)
 			return
 		}
 
@@ -1178,11 +1332,11 @@ func (h *Handlers) HandleCreateContactForm() http.HandlerFunc {
 			LinkedInURL: linkedinURL,
 		})
 		if err != nil {
-			http.Redirect(w, r, "/threads?error="+err.Error(), http.StatusSeeOther)
+			http.Redirect(w, r, "/contacts?error="+err.Error(), http.StatusSeeOther)
 			return
 		}
 
-		http.Redirect(w, r, "/threads?success=Contact+created", http.StatusSeeOther)
+		http.Redirect(w, r, "/contacts?success=Contact+created", http.StatusSeeOther)
 	}
 }
 
@@ -1212,80 +1366,6 @@ func (h *Handlers) HandleCreateThreadForm() http.HandlerFunc {
 		}
 
 		http.Redirect(w, r, "/threads?success=Thread+created", http.StatusSeeOther)
-	}
-}
-
-// HandleLinkRoleForm handles POST /threads/{id}/roles/link (HTML form)
-func (h *Handlers) HandleLinkRoleForm() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		threadID := chi.URLParam(r, "id")
-
-		if err := r.ParseForm(); err != nil {
-			http.Redirect(w, r, "/threads/"+threadID+"?error=Invalid+form+data", http.StatusSeeOther)
-			return
-		}
-
-		roleRef := r.FormValue("role_ref")
-		if roleRef == "" {
-			http.Redirect(w, r, "/threads/"+threadID+"?error=Role+is+required", http.StatusSeeOther)
-			return
-		}
-
-		// Parse role_ref (format: "companySlug/roleSlug")
-		parts := splitRoleRef(roleRef)
-		if len(parts) != 2 {
-			http.Redirect(w, r, "/threads/"+threadID+"?error=Invalid+role+reference", http.StatusSeeOther)
-			return
-		}
-
-		err := h.threadService.LinkRole(r.Context(), app.LinkRoleInput{
-			ThreadID:    threadID,
-			CompanySlug: parts[0],
-			RoleSlug:    parts[1],
-		})
-		if err != nil {
-			http.Redirect(w, r, "/threads/"+threadID+"?error="+err.Error(), http.StatusSeeOther)
-			return
-		}
-
-		http.Redirect(w, r, "/threads/"+threadID+"?success=Role+linked", http.StatusSeeOther)
-	}
-}
-
-// HandleCreateMeetingFromThreadForm handles POST /threads/{id}/meetings/new (HTML form)
-func (h *Handlers) HandleCreateMeetingFromThreadForm() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		threadID := chi.URLParam(r, "id")
-
-		if err := r.ParseForm(); err != nil {
-			http.Redirect(w, r, "/threads/"+threadID+"?error=Invalid+form+data", http.StatusSeeOther)
-			return
-		}
-
-		title := r.FormValue("title")
-		occurredAt := r.FormValue("occurred_at")
-		companySlug := r.FormValue("company_slug")
-
-		if title == "" || occurredAt == "" || companySlug == "" {
-			http.Redirect(w, r, "/threads/"+threadID+"?error=Title,+date,+and+company+are+required", http.StatusSeeOther)
-			return
-		}
-
-		// Convert datetime-local to RFC3339
-		occurredAtRFC := occurredAt + ":00Z"
-
-		_, err := h.meetingService.CreateMeeting(r.Context(), app.CreateMeetingInput{
-			CompanySlug: companySlug,
-			ThreadID:    threadID,
-			OccurredAt:  occurredAtRFC,
-			Title:       title,
-		})
-		if err != nil {
-			http.Redirect(w, r, "/threads/"+threadID+"?error="+err.Error(), http.StatusSeeOther)
-			return
-		}
-
-		http.Redirect(w, r, "/threads/"+threadID+"?success=Meeting+created", http.StatusSeeOther)
 	}
 }
 
@@ -1662,49 +1742,6 @@ func (h *Handlers) HandleCreateRoleMeetingV2() http.HandlerFunc {
 	}
 }
 
-// CreateThreadMeetingV2Request is the request body for creating a thread-only meeting (v2)
-type CreateThreadMeetingV2Request struct {
-	OccurredAt string `json:"occurred_at"`
-	Title      string `json:"title"`
-}
-
-// HandleCreateThreadMeetingV2 handles POST /api/threads/{id}/meetings (JSON)
-func (h *Handlers) HandleCreateThreadMeetingV2() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		threadID := chi.URLParam(r, "id")
-
-		var req CreateThreadMeetingV2Request
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		if req.Title == "" || req.OccurredAt == "" {
-			http.Error(w, "title and occurred_at are required", http.StatusBadRequest)
-			return
-		}
-
-		meeting, err := h.meetingV2Service.CreateThreadMeeting(r.Context(), app.CreateThreadMeetingInput{
-			ThreadID:   threadID,
-			OccurredAt: req.OccurredAt,
-			Title:      req.Title,
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(MeetingV2Response{
-			ID:         meeting.ID,
-			OccurredAt: meeting.OccurredAt.Format(time.RFC3339),
-			Title:      meeting.Title,
-			ThreadID:   meeting.ThreadID,
-			PathMD:     meeting.PathMD,
-		})
-	}
-}
 
 // HandleCreateRoleMeetingV2Form handles POST /companies/{companySlug}/roles/{roleSlug}/meetings/new (HTML form)
 func (h *Handlers) HandleCreateRoleMeetingV2Form() http.HandlerFunc {
@@ -1744,41 +1781,6 @@ func (h *Handlers) HandleCreateRoleMeetingV2Form() http.HandlerFunc {
 	}
 }
 
-// HandleCreateThreadMeetingV2Form handles POST /threads/{id}/meetings/v2/new (HTML form)
-func (h *Handlers) HandleCreateThreadMeetingV2Form() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		threadID := chi.URLParam(r, "id")
-		redirectURL := "/threads/" + threadID
-
-		if err := r.ParseForm(); err != nil {
-			http.Redirect(w, r, redirectURL+"?error=Failed+to+parse+form", http.StatusSeeOther)
-			return
-		}
-
-		title := r.FormValue("title")
-		occurredAt := r.FormValue("occurred_at")
-
-		if title == "" || occurredAt == "" {
-			http.Redirect(w, r, redirectURL+"?error=Title+and+date+are+required", http.StatusSeeOther)
-			return
-		}
-
-		// Convert datetime-local to RFC3339
-		occurredAtRFC := occurredAt + ":00Z"
-
-		_, err := h.meetingV2Service.CreateThreadMeeting(r.Context(), app.CreateThreadMeetingInput{
-			ThreadID:   threadID,
-			OccurredAt: occurredAtRFC,
-			Title:      title,
-		})
-		if err != nil {
-			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
-			return
-		}
-
-		http.Redirect(w, r, redirectURL+"?success=Meeting+created", http.StatusSeeOther)
-	}
-}
 
 // --- Artifact Handlers ---
 

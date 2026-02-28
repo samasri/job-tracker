@@ -143,43 +143,6 @@ func (r *ThreadRepo) List(ctx context.Context) ([]*domain.Thread, error) {
 	return threads, rows.Err()
 }
 
-// LinkRole links a thread to a role (idempotent - ignores if already exists)
-func (r *ThreadRepo) LinkRole(ctx context.Context, threadID, roleID string) error {
-	_, err := r.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO thread_roles (thread_id, role_id) VALUES (?, ?)`,
-		threadID, roleID)
-	if err != nil {
-		return fmt.Errorf("linking thread to role: %w", err)
-	}
-	return nil
-}
-
-// GetLinkedRoles returns all roles linked to a thread
-func (r *ThreadRepo) GetLinkedRoles(ctx context.Context, threadID string) ([]*domain.Role, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT r.id, r.company_id, r.slug, r.title, r.status, r.folder_path, r.created_at, r.updated_at
-		 FROM roles r
-		 INNER JOIN thread_roles tr ON tr.role_id = r.id
-		 WHERE tr.thread_id = ?
-		 ORDER BY r.created_at ASC, r.id ASC`, threadID)
-	if err != nil {
-		return nil, fmt.Errorf("getting linked roles: %w", err)
-	}
-	defer rows.Close()
-
-	var roles []*domain.Role
-	for rows.Next() {
-		role := &domain.Role{}
-		if err := rows.Scan(&role.ID, &role.CompanyID, &role.Slug, &role.Title, &role.Status,
-			&role.FolderPath, &role.CreatedAt, &role.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scanning role: %w", err)
-		}
-		roles = append(roles, role)
-	}
-
-	return roles, rows.Err()
-}
-
 // UpdateCodeSlug updates the code, slug, and folder_path for a thread
 func (r *ThreadRepo) UpdateCodeSlug(ctx context.Context, threadID, code, slug, folderPath string) error {
 	_, err := r.db.ExecContext(ctx,

@@ -45,3 +45,17 @@ func GenerateThreadSlug(contactName, code string) string {
 func ThreadFolderPath(slug string) string {
 	return "data/threads/" + slug
 }
+
+// GenerateContactSlug generates a contact folder slug.
+// Format: "<slugified-contact-name>-<code>"
+func GenerateContactSlug(name, code string) string {
+	if name != "" {
+		return Slugify(name) + "-" + code
+	}
+	return "contact-" + code
+}
+
+// ContactFolderPath returns the folder path for a contact given its slug.
+func ContactFolderPath(slug string) string {
+	return "data/contacts/" + slug
+}

@@ -94,15 +94,8 @@ func TestBehavioral_CreateCompanyAndRole(t *testing.T) {
 }
 
 // Behavioral Test #2: Create contact + thread + meeting creates note file and links
-func TestBehavioral_CreateContactThreadMeeting(t *testing.T) {
+func TestBehavioral_CreateContactMeeting(t *testing.T) {
 	env := testharness.NewTestEnv(t)
-
-	// Create a company first
-	companyResp := env.PostJSON("/api/companies", map[string]string{
-		"slug": "tech-corp",
-		"name": "Tech Corporation",
-	})
-	env.AssertStatus(companyResp, 201)
 
 	// Create a contact
 	contactResp := env.PostJSON("/api/contacts", map[string]string{
@@ -121,23 +114,8 @@ func TestBehavioral_CreateContactThreadMeeting(t *testing.T) {
 		t.Errorf("Expected name 'Jane Recruiter', got '%v'", contact["name"])
 	}
 
-	// Create a thread
-	threadResp := env.PostJSON("/api/threads", map[string]string{
-		"title":      "Initial Outreach - Tech Corp",
-		"contact_id": contactID,
-	})
-	env.AssertStatus(threadResp, 201)
-
-	var thread map[string]interface{}
-	env.ReadJSON(threadResp, &thread)
-	threadID := thread["id"].(string)
-
-	if thread["title"] != "Initial Outreach - Tech Corp" {
-		t.Errorf("Expected title 'Initial Outreach - Tech Corp', got '%v'", thread["title"])
-	}
-
-	// Create a thread meeting (v2 API - meetings belong to threads, not companies)
-	meetingResp := env.PostJSON("/api/threads/"+threadID+"/meetings", map[string]string{
+	// Create a contact meeting via the new API
+	meetingResp := env.PostJSON("/api/contacts/"+contactID+"/meetings", map[string]string{
 		"occurred_at": "2024-01-15T10:00:00Z",
 		"title":       "Initial Phone Screen",
 	})
@@ -155,9 +133,12 @@ func TestBehavioral_CreateContactThreadMeeting(t *testing.T) {
 		t.Error("Meeting should have a path_md")
 	}
 
-	// Assert meeting note file exists
+	// Assert meeting note file exists under the contact folder
 	if !env.FileExists(pathMD) {
 		t.Errorf("Meeting note file should exist at %s", pathMD)
+	}
+	if !strings.Contains(pathMD, "data/contacts/") {
+		t.Errorf("Meeting note should be under data/contacts/, got: %s", pathMD)
 	}
 
 	// Verify meeting note content has frontmatter
@@ -169,29 +150,18 @@ func TestBehavioral_CreateContactThreadMeeting(t *testing.T) {
 		t.Error("Meeting note should contain the meeting title")
 	}
 
-	// Assert GET /api/threads/{id} shows meeting in meetings_v2
-	getThreadResp := env.Get("/api/threads/" + threadID)
-	env.AssertStatus(getThreadResp, 200)
-
-	var threadDetails map[string]interface{}
-	env.ReadJSON(getThreadResp, &threadDetails)
-
-	meetingsV2 := threadDetails["meetings_v2"].([]interface{})
-	if len(meetingsV2) != 1 {
-		t.Fatalf("Expected 1 meeting in thread meetings_v2, got %d", len(meetingsV2))
+	// Assert GET /api/contacts/{id} returns the contact
+	getContactResp := env.Get("/api/contacts/" + contactID)
+	env.AssertStatus(getContactResp, 200)
+	var contactDetails map[string]interface{}
+	env.ReadJSON(getContactResp, &contactDetails)
+	if contactDetails["name"] != "Jane Recruiter" {
+		t.Errorf("Expected contact name 'Jane Recruiter', got '%v'", contactDetails["name"])
 	}
-
-	threadMeeting := meetingsV2[0].(map[string]interface{})
-	if threadMeeting["title"] != "Initial Phone Screen" {
-		t.Errorf("Expected meeting title 'Initial Phone Screen', got '%v'", threadMeeting["title"])
-	}
-
-	// Thread meetings don't belong to companies (only to threads or roles)
-	// so we don't check company meetings here
 }
 
 // Behavioral Test #3: One thread links to multiple roles across companies (idempotent)
-func TestBehavioral_ThreadLinksMultipleRoles(t *testing.T) {
+func TestBehavioral_ContactLinksMultipleRoles(t *testing.T) {
 	env := testharness.NewTestEnv(t)
 
 	// Create company A with role A
@@ -214,36 +184,36 @@ func TestBehavioral_ThreadLinksMultipleRoles(t *testing.T) {
 		"title": "Role B",
 	})
 
-	// Create a thread
-	threadResp := env.PostJSON("/api/threads", map[string]string{
-		"title": "Multi-company Thread",
+	// Create a contact
+	contactResp := env.PostJSON("/api/contacts", map[string]string{
+		"name": "Multi-company Contact",
 	})
-	env.AssertStatus(threadResp, 201)
+	env.AssertStatus(contactResp, 201)
 
-	var thread map[string]interface{}
-	env.ReadJSON(threadResp, &thread)
-	threadID := thread["id"].(string)
+	var contact map[string]interface{}
+	env.ReadJSON(contactResp, &contact)
+	contactID := contact["id"].(string)
 
-	// Link thread to role A
-	linkResp1 := env.PostJSON("/api/threads/"+threadID+"/roles", map[string]string{
+	// Link contact to role A
+	linkResp1 := env.PostJSON("/api/contacts/"+contactID+"/roles", map[string]string{
 		"role_ref": "company-a/role-a",
 	})
 	env.AssertStatus(linkResp1, 204)
 
-	// Link thread to role B
-	linkResp2 := env.PostJSON("/api/threads/"+threadID+"/roles", map[string]string{
+	// Link contact to role B
+	linkResp2 := env.PostJSON("/api/contacts/"+contactID+"/roles", map[string]string{
 		"role_ref": "company-b/role-b",
 	})
 	env.AssertStatus(linkResp2, 204)
 
-	// Get thread and verify both roles are linked
-	getThreadResp := env.Get("/api/threads/" + threadID)
-	env.AssertStatus(getThreadResp, 200)
+	// Get contact and verify both roles are linked
+	getContactResp := env.Get("/api/contacts/" + contactID)
+	env.AssertStatus(getContactResp, 200)
 
-	var threadDetails map[string]interface{}
-	env.ReadJSON(getThreadResp, &threadDetails)
+	var contactDetails map[string]interface{}
+	env.ReadJSON(getContactResp, &contactDetails)
 
-	roles := threadDetails["roles"].([]interface{})
+	roles := contactDetails["roles"].([]interface{})
 	if len(roles) != 2 {
 		t.Fatalf("Expected 2 linked roles, got %d", len(roles))
 	}
@@ -266,19 +236,19 @@ func TestBehavioral_ThreadLinksMultipleRoles(t *testing.T) {
 	}
 
 	// Test idempotency: link same role again, should not create duplicate
-	linkResp3 := env.PostJSON("/api/threads/"+threadID+"/roles", map[string]string{
+	linkResp3 := env.PostJSON("/api/contacts/"+contactID+"/roles", map[string]string{
 		"role_ref": "company-a/role-a",
 	})
 	env.AssertStatus(linkResp3, 204)
 
 	// Verify still only 2 roles (no duplicate)
-	getThreadResp2 := env.Get("/api/threads/" + threadID)
-	env.AssertStatus(getThreadResp2, 200)
+	getContactResp2 := env.Get("/api/contacts/" + contactID)
+	env.AssertStatus(getContactResp2, 200)
 
-	var threadDetails2 map[string]interface{}
-	env.ReadJSON(getThreadResp2, &threadDetails2)
+	var contactDetails2 map[string]interface{}
+	env.ReadJSON(getContactResp2, &contactDetails2)
 
-	roles2 := threadDetails2["roles"].([]interface{})
+	roles2 := contactDetails2["roles"].([]interface{})
 	if len(roles2) != 2 {
 		t.Fatalf("Expected 2 linked roles after idempotent call, got %d (duplicates detected)", len(roles2))
 	}
@@ -404,26 +374,13 @@ func TestSmoke_HTMLPages(t *testing.T) {
 		"title": "HTML Test Role",
 	})
 
-	// Create a contact and thread
+	// Create a contact
 	contactResp := env.PostJSON("/api/contacts", map[string]string{
 		"name": "HTML Test Contact",
 	})
 	var contact map[string]interface{}
 	env.ReadJSON(contactResp, &contact)
 	contactID := contact["id"].(string)
-
-	threadResp := env.PostJSON("/api/threads", map[string]string{
-		"title":      "HTML Test Thread",
-		"contact_id": contactID,
-	})
-	var thread map[string]interface{}
-	env.ReadJSON(threadResp, &thread)
-	threadID := thread["id"].(string)
-
-	// Link thread to role first
-	env.PostJSON("/api/threads/"+threadID+"/roles", map[string]string{
-		"role_ref": "html-test-company/html-test-role",
-	})
 
 	// Create a role meeting (v2) - will appear in the role meetings section
 	env.PostJSON("/api/companies/html-test-company/roles/html-test-role/meetings", map[string]string{
@@ -452,35 +409,38 @@ func TestSmoke_HTMLPages(t *testing.T) {
 	if !strings.Contains(companyBody, "HTML Test Role") {
 		t.Error("/companies/{slug} page should contain role title")
 	}
-	// Company page should show the Add Role form
 	if !strings.Contains(companyBody, "Add Role") {
 		t.Error("/companies/{slug} page should contain Add Role form")
 	}
 
-	// Test GET /threads/{id} page
+	// Test GET /contacts/{id} page
+	contactPageResp := env.Get("/contacts/" + contactID)
+	env.AssertStatus(contactPageResp, 200)
+	contactBody := env.ReadBody(contactPageResp)
+	if !strings.Contains(contactBody, "HTML Test Contact") {
+		t.Error("/contacts/{id} page should contain contact name")
+	}
+
+	// Test GET /threads/{id} redirects to /contacts/{contactID} (follows redirect, lands on contact page)
+	// Create a thread linked to the contact so the redirect goes to the contact
+	threadResp := env.PostJSON("/api/threads", map[string]string{
+		"title":      "HTML Test Thread",
+		"contact_id": contactID,
+	})
+	var thread map[string]interface{}
+	env.ReadJSON(threadResp, &thread)
+	threadID := thread["id"].(string)
+
 	threadPageResp := env.Get("/threads/" + threadID)
 	env.AssertStatus(threadPageResp, 200)
-	threadBody := env.ReadBody(threadPageResp)
-	if !strings.Contains(threadBody, "HTML Test Thread") {
-		t.Error("/threads/{id} page should contain thread title")
-	}
-	if !strings.Contains(threadBody, "HTML Test Meeting") {
-		t.Error("/threads/{id} page should contain meeting title")
-	}
-	if !strings.Contains(threadBody, "HTML Test Company") {
-		t.Error("/threads/{id} page should contain linked company name")
-	}
-	if !strings.Contains(threadBody, "HTML Test Role") {
-		t.Error("/threads/{id} page should contain linked role title")
+	threadRedirectBody := env.ReadBody(threadPageResp)
+	if !strings.Contains(threadRedirectBody, "HTML Test Contact") {
+		t.Error("/threads/{id} redirect should land on the owning contact page")
 	}
 
 	// Test 404 for non-existent company
 	notFoundResp := env.Get("/companies/non-existent")
 	env.AssertStatus(notFoundResp, 404)
-
-	// Test 404 for non-existent thread
-	notFoundThreadResp := env.Get("/threads/non-existent-id")
-	env.AssertStatus(notFoundThreadResp, 404)
 }
 
 // U1 Behavioral Test: Create company via UI form
@@ -633,18 +593,15 @@ func TestUI_CreateMeetingViaForm(t *testing.T) {
 }
 
 // U3 Behavioral Test: Create contact and thread via UI form
-func TestUI_CreateContactAndThreadViaForm(t *testing.T) {
+func TestUI_CreateContactViaForm(t *testing.T) {
 	env := testharness.NewTestEnv(t)
 
-	// Verify /threads page loads
+	// Verify GET /threads redirects to /contacts (follows redirect → 200)
 	threadsResp := env.Get("/threads")
 	env.AssertStatus(threadsResp, 200)
 	threadsBody := env.ReadBody(threadsResp)
 	if !strings.Contains(threadsBody, "Add Contact") {
-		t.Error("/threads page should contain 'Add Contact' form")
-	}
-	if !strings.Contains(threadsBody, "Add Thread") {
-		t.Error("/threads page should contain 'Add Thread' form")
+		t.Error("/threads redirect to /contacts should show 'Add Contact' form")
 	}
 
 	// Create a contact via UI
@@ -654,39 +611,18 @@ func TestUI_CreateContactAndThreadViaForm(t *testing.T) {
 		"email": "test@example.com",
 	})
 	env.AssertStatus(contactResp, 200)
-	contactBody := env.ReadBody(contactResp)
-	if !strings.Contains(contactBody, "Contact+created") || !strings.Contains(contactBody, "success") {
-		// Check that contact appears in the dropdown
-		if !strings.Contains(contactBody, "UI Test Contact") {
-			t.Error("Created contact should appear in thread dropdown")
-		}
-	}
 
-	// Now get the threads page to find the contact in dropdown
-	threadsResp2 := env.Get("/threads")
-	env.AssertStatus(threadsResp2, 200)
-	threadsBody2 := env.ReadBody(threadsResp2)
-	if !strings.Contains(threadsBody2, "UI Test Contact") {
-		t.Error("Contact should appear in the dropdown")
-	}
-
-	// Create a thread via UI
-	threadResp := env.PostFormFollowRedirect("/threads/new", map[string]string{
-		"title": "UI Test Thread",
-	})
-	env.AssertStatus(threadResp, 200)
-
-	// Verify thread appears in the list
-	threadsResp3 := env.Get("/threads")
-	env.AssertStatus(threadsResp3, 200)
-	threadsBody3 := env.ReadBody(threadsResp3)
-	if !strings.Contains(threadsBody3, "UI Test Thread") {
-		t.Error("Created thread should appear in /threads list")
+	// Verify contact appears in /contacts list
+	contactsResp := env.Get("/contacts")
+	env.AssertStatus(contactsResp, 200)
+	contactsBody := env.ReadBody(contactsResp)
+	if !strings.Contains(contactsBody, "UI Test Contact") {
+		t.Error("Created contact should appear in /contacts list")
 	}
 }
 
-// U3 Behavioral Test: Link role to thread via UI (idempotent)
-func TestUI_LinkRoleToThreadViaForm(t *testing.T) {
+// U3 Behavioral Test: Link role to contact via UI (idempotent)
+func TestUI_LinkRoleToContactViaForm(t *testing.T) {
 	env := testharness.NewTestEnv(t)
 
 	// Create a company and role
@@ -699,47 +635,47 @@ func TestUI_LinkRoleToThreadViaForm(t *testing.T) {
 		"title": "Link Test Role",
 	})
 
-	// Create a thread via API
-	threadResp := env.PostJSON("/api/threads", map[string]string{
-		"title": "Link Test Thread",
+	// Create a contact via API
+	contactResp := env.PostJSON("/api/contacts", map[string]string{
+		"name": "Link Test Contact",
 	})
-	var thread map[string]interface{}
-	env.ReadJSON(threadResp, &thread)
-	threadID := thread["id"].(string)
+	var contact map[string]interface{}
+	env.ReadJSON(contactResp, &contact)
+	contactID := contact["id"].(string)
 
-	// Verify thread page shows the role in dropdown
-	threadPageResp := env.Get("/threads/" + threadID)
-	env.AssertStatus(threadPageResp, 200)
-	threadPageBody := env.ReadBody(threadPageResp)
-	if !strings.Contains(threadPageBody, "Link Test Company") {
-		t.Error("Thread page should show company in role dropdown")
+	// Verify contact page shows the role in dropdown
+	contactPageResp := env.Get("/contacts/" + contactID)
+	env.AssertStatus(contactPageResp, 200)
+	contactPageBody := env.ReadBody(contactPageResp)
+	if !strings.Contains(contactPageBody, "Link Test Company") {
+		t.Error("Contact page should show company in role dropdown")
 	}
-	if !strings.Contains(threadPageBody, "Link Test Role") {
-		t.Error("Thread page should show role in dropdown")
+	if !strings.Contains(contactPageBody, "Link Test Role") {
+		t.Error("Contact page should show role in dropdown")
 	}
 
-	// Link role to thread via UI
-	linkResp := env.PostFormFollowRedirect("/threads/"+threadID+"/roles/link", map[string]string{
+	// Link role to contact via UI
+	linkResp := env.PostFormFollowRedirect("/contacts/"+contactID+"/roles/link", map[string]string{
 		"role_ref": "link-test-company/link-test-role",
 	})
 	env.AssertStatus(linkResp, 200)
 	linkBody := env.ReadBody(linkResp)
 	if !strings.Contains(linkBody, "Link Test Role") {
-		t.Error("Linked role should appear on thread page")
+		t.Error("Linked role should appear on contact page")
 	}
 
 	// Link same role again (idempotent) - should not create duplicate
-	linkResp2 := env.PostFormFollowRedirect("/threads/"+threadID+"/roles/link", map[string]string{
+	linkResp2 := env.PostFormFollowRedirect("/contacts/"+contactID+"/roles/link", map[string]string{
 		"role_ref": "link-test-company/link-test-role",
 	})
 	env.AssertStatus(linkResp2, 200)
 
 	// Verify via API that role appears only once
-	apiResp := env.Get("/api/threads/" + threadID)
+	apiResp := env.Get("/api/contacts/" + contactID)
 	env.AssertStatus(apiResp, 200)
-	var apiThread map[string]interface{}
-	env.ReadJSON(apiResp, &apiThread)
-	roles := apiThread["roles"].([]interface{})
+	var apiContact map[string]interface{}
+	env.ReadJSON(apiResp, &apiContact)
+	roles := apiContact["roles"].([]interface{})
 	if len(roles) != 1 {
 		t.Errorf("Expected 1 linked role after idempotent link, got %d", len(roles))
 	}
@@ -1127,20 +1063,6 @@ func TestExport_IncludesMeetingsV2(t *testing.T) {
 	env.ReadJSON(meetingResp, &meeting)
 	meetingID := meeting["id"].(string)
 
-	// Also create a thread meeting
-	threadResp := env.PostJSON("/api/threads", map[string]string{
-		"title": "Export V2 Thread",
-	})
-	var thread map[string]interface{}
-	env.ReadJSON(threadResp, &thread)
-	threadID := thread["id"].(string)
-
-	threadMeetingResp := env.PostJSON("/api/threads/"+threadID+"/meetings", map[string]string{
-		"occurred_at": "2024-09-02T11:00:00Z",
-		"title":       "V2 Thread Export Test Meeting",
-	})
-	env.AssertStatus(threadMeetingResp, 201)
-
 	// Export
 	env.PostJSON("/api/export", nil)
 
@@ -1155,9 +1077,6 @@ func TestExport_IncludesMeetingsV2(t *testing.T) {
 	}
 	if !strings.Contains(exportContent, "V2 Export Test Meeting") {
 		t.Error("export.json should contain the role meeting title")
-	}
-	if !strings.Contains(exportContent, "V2 Thread Export Test Meeting") {
-		t.Error("export.json should contain the thread meeting title")
 	}
 
 	// Verify determinism with meetings_v2
@@ -1332,11 +1251,6 @@ func TestMeetingV2_CreateRoleMeeting(t *testing.T) {
 		t.Error("Expected role_id to be set for role meeting")
 	}
 
-	// Verify thread_id is NOT set
-	if meeting["thread_id"] != nil && meeting["thread_id"].(string) != "" {
-		t.Error("Expected thread_id to be empty for role meeting")
-	}
-
 	// Verify path_md is under role folder
 	pathMD := meeting["path_md"].(string)
 	expectedPrefix := "data/companies/v2-role-meeting-company/roles/backend-engineer/meetings/"
@@ -1352,74 +1266,6 @@ func TestMeetingV2_CreateRoleMeeting(t *testing.T) {
 	// Verify file content
 	content := env.ReadFile(pathMD)
 	if !strings.Contains(content, "# Technical Interview") {
-		t.Error("Meeting note should contain title")
-	}
-	if !strings.Contains(content, "meeting_id: "+meetingID) {
-		t.Error("Meeting note should contain meeting_id")
-	}
-}
-
-// R3 E2E Test: Thread-only meeting creation (v2) creates file under thread folder
-func TestMeetingV2_CreateThreadOnlyMeeting(t *testing.T) {
-	env := testharness.NewTestEnv(t)
-
-	// Create a thread
-	threadResp := env.PostJSON("/api/threads", map[string]string{
-		"title": "V2 Thread Only Meeting Thread",
-	})
-	env.AssertStatus(threadResp, 201)
-
-	var thread map[string]interface{}
-	env.ReadJSON(threadResp, &thread)
-	threadID := thread["id"].(string)
-	threadSlug := thread["slug"].(string)
-
-	// Create a thread-only meeting via v2 API
-	meetingResp := env.PostJSON("/api/threads/"+threadID+"/meetings", map[string]string{
-		"occurred_at": "2024-07-20T14:30:00Z",
-		"title":       "Networking Coffee Chat",
-	})
-	env.AssertStatus(meetingResp, 201)
-
-	var meeting map[string]interface{}
-	env.ReadJSON(meetingResp, &meeting)
-
-	// Verify meeting ID is 8 characters
-	meetingID := meeting["id"].(string)
-	if len(meetingID) != 8 {
-		t.Errorf("Expected meeting ID to be 8 characters, got %d: %q", len(meetingID), meetingID)
-	}
-
-	// Verify thread_id is set
-	returnedThreadID := meeting["thread_id"].(string)
-	if returnedThreadID != threadID {
-		t.Errorf("Expected thread_id %q, got %q", threadID, returnedThreadID)
-	}
-
-	// Verify role_id is NOT set
-	if meeting["role_id"] != nil && meeting["role_id"].(string) != "" {
-		t.Error("Expected role_id to be empty for thread-only meeting")
-	}
-
-	// Verify path_md is under thread folder (flattened, using slug, no /meetings subfolder)
-	pathMD := meeting["path_md"].(string)
-	expectedPrefix := "data/threads/" + threadSlug + "/"
-	if !strings.HasPrefix(pathMD, expectedPrefix) {
-		t.Errorf("Expected path to start with %q, got %q", expectedPrefix, pathMD)
-	}
-	// Ensure no /meetings/ subfolder
-	if strings.Contains(pathMD, "/meetings/") {
-		t.Errorf("Expected flattened path (no /meetings/ subfolder), got %q", pathMD)
-	}
-
-	// Verify file exists
-	if !env.FileExists(pathMD) {
-		t.Errorf("Meeting note file should exist at %s", pathMD)
-	}
-
-	// Verify file content
-	content := env.ReadFile(pathMD)
-	if !strings.Contains(content, "# Networking Coffee Chat") {
 		t.Error("Meeting note should contain title")
 	}
 	if !strings.Contains(content, "meeting_id: "+meetingID) {
@@ -1451,32 +1297,6 @@ func TestUI_CreateRoleMeetingV2ViaForm(t *testing.T) {
 	// Verify meeting file exists in the role folder
 	if !env.FileExists("data/companies/ui-v2-meeting-company/roles/ui-test-role/meetings") {
 		t.Error("Role meetings folder should exist")
-	}
-}
-
-// R3 UI Test: Create thread-only meeting via HTML form
-func TestUI_CreateThreadMeetingV2ViaForm(t *testing.T) {
-	env := testharness.NewTestEnv(t)
-
-	// Create a thread
-	threadResp := env.PostJSON("/api/threads", map[string]string{
-		"title": "UI V2 Thread Meeting Thread",
-	})
-	var thread map[string]interface{}
-	env.ReadJSON(threadResp, &thread)
-	threadID := thread["id"].(string)
-	threadSlug := thread["slug"].(string)
-
-	// Create thread-only meeting via v2 form
-	meetingResp := env.PostFormFollowRedirect("/threads/"+threadID+"/meetings/v2/new", map[string]string{
-		"title":       "UI Thread Meeting",
-		"occurred_at": "2024-08-02T11:00",
-	})
-	env.AssertStatus(meetingResp, 200)
-
-	// Verify thread folder exists (flattened - no /meetings subfolder)
-	if !env.FileExists("data/threads/" + threadSlug) {
-		t.Errorf("Thread folder should exist at data/threads/%s", threadSlug)
 	}
 }
 
@@ -1760,3 +1580,182 @@ func TestExport_IncludesResumes(t *testing.T) {
 		t.Error("Export with resumes should be deterministic")
 	}
 }
+
+// TestSmoke_ContactsPage verifies the /contacts list and detail pages load
+func TestSmoke_ContactsPage(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create a contact via API
+	contactResp := env.PostJSON("/api/contacts", map[string]string{
+		"name": "Smoke Test Contact",
+		"org":  "Smoke Test Org",
+	})
+	env.AssertStatus(contactResp, 201)
+	var contact map[string]interface{}
+	env.ReadJSON(contactResp, &contact)
+	contactID := contact["id"].(string)
+
+	// GET /contacts returns 200 and contains contact name
+	listResp := env.Get("/contacts")
+	env.AssertStatus(listResp, 200)
+	listBody := env.ReadBody(listResp)
+	if !strings.Contains(listBody, "Smoke Test Contact") {
+		t.Error("/contacts page should contain contact name")
+	}
+
+	// GET /contacts/{id} returns 200
+	detailResp := env.Get("/contacts/" + contactID)
+	env.AssertStatus(detailResp, 200)
+	detailBody := env.ReadBody(detailResp)
+	if !strings.Contains(detailBody, "Smoke Test Contact") {
+		t.Error("/contacts/{id} page should contain contact name")
+	}
+}
+
+// TestBehavioral_LinkRoleToContactViaAPI verifies POST /api/contacts/{id}/roles
+// and GET /api/contacts/{id} returns the linked role
+func TestBehavioral_LinkRoleToContactViaAPI(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create company and role
+	env.PostJSON("/api/companies", map[string]string{
+		"slug": "contact-link-company",
+		"name": "Contact Link Company",
+	})
+	env.PostJSON("/api/companies/contact-link-company/roles", map[string]string{
+		"slug":  "contact-link-role",
+		"title": "Contact Link Role",
+	})
+
+	// Create contact
+	contactResp := env.PostJSON("/api/contacts", map[string]string{
+		"name": "Contact Link Test",
+	})
+	env.AssertStatus(contactResp, 201)
+	var contact map[string]interface{}
+	env.ReadJSON(contactResp, &contact)
+	contactID := contact["id"].(string)
+
+	// Link role to contact via API
+	linkResp := env.PostJSON("/api/contacts/"+contactID+"/roles", map[string]string{
+		"role_ref": "contact-link-company/contact-link-role",
+	})
+	env.AssertStatus(linkResp, 204)
+
+	// GET /api/contacts/{id} should include the linked role
+	getResp := env.Get("/api/contacts/" + contactID)
+	env.AssertStatus(getResp, 200)
+	var contactDetails map[string]interface{}
+	env.ReadJSON(getResp, &contactDetails)
+
+	roles, ok := contactDetails["roles"].([]interface{})
+	if !ok || len(roles) != 1 {
+		t.Fatalf("Expected 1 linked role, got %v", contactDetails["roles"])
+	}
+
+	roleEntry := roles[0].(map[string]interface{})
+	roleObj := roleEntry["role"].(map[string]interface{})
+	if roleObj["slug"] != "contact-link-role" {
+		t.Errorf("Expected role slug 'contact-link-role', got '%v'", roleObj["slug"])
+	}
+
+	companyObj := roleEntry["company"].(map[string]interface{})
+	if companyObj["slug"] != "contact-link-company" {
+		t.Errorf("Expected company slug 'contact-link-company', got '%v'", companyObj["slug"])
+	}
+
+	// Link same role again (idempotent) — should not error
+	linkResp2 := env.PostJSON("/api/contacts/"+contactID+"/roles", map[string]string{
+		"role_ref": "contact-link-company/contact-link-role",
+	})
+	env.AssertStatus(linkResp2, 204)
+
+	// Still only one role
+	getResp2 := env.Get("/api/contacts/" + contactID)
+	env.AssertStatus(getResp2, 200)
+	var contactDetails2 map[string]interface{}
+	env.ReadJSON(getResp2, &contactDetails2)
+	roles2 := contactDetails2["roles"].([]interface{})
+	if len(roles2) != 1 {
+		t.Errorf("Expected 1 linked role after idempotent link, got %d", len(roles2))
+	}
+}
+
+// TestUI_CreateContactAndLinkRole tests the contacts form flow
+func TestUI_CreateContactAndLinkRole(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	// Create company and role for linking
+	env.PostFormFollowRedirect("/companies/new", map[string]string{
+		"slug": "ui-contact-company",
+		"name": "UI Contact Company",
+	})
+	env.PostFormFollowRedirect("/companies/ui-contact-company/roles/new", map[string]string{
+		"slug":  "ui-contact-role",
+		"title": "UI Contact Role",
+	})
+
+	// GET /contacts shows the Add Contact form
+	contactsResp := env.Get("/contacts")
+	env.AssertStatus(contactsResp, 200)
+	contactsBody := env.ReadBody(contactsResp)
+	if !strings.Contains(contactsBody, "Add Contact") {
+		t.Error("/contacts page should contain 'Add Contact' form")
+	}
+
+	// Create contact via form — should redirect to /contacts
+	createResp := env.PostFormFollowRedirect("/contacts/new", map[string]string{
+		"name":  "UI Form Contact",
+		"org":   "UI Form Org",
+		"email": "ui@form.com",
+	})
+	env.AssertStatus(createResp, 200)
+	createBody := env.ReadBody(createResp)
+	if !strings.Contains(createBody, "UI Form Contact") {
+		t.Error("/contacts list should show newly created contact")
+	}
+
+	// Find contact ID via API
+	contactListAPIResp := env.PostJSON("/api/contacts", map[string]string{
+		"name": "Role Link Contact",
+	})
+	var c map[string]interface{}
+	env.ReadJSON(contactListAPIResp, &c)
+	contactID := c["id"].(string)
+
+	// Visit contact page — should show link role form
+	contactPageResp := env.Get("/contacts/" + contactID)
+	env.AssertStatus(contactPageResp, 200)
+	contactPageBody := env.ReadBody(contactPageResp)
+	if !strings.Contains(contactPageBody, "Link Role") {
+		t.Error("/contacts/{id} page should contain 'Link Role' form")
+	}
+
+	// Link role via form
+	linkResp := env.PostFormFollowRedirect("/contacts/"+contactID+"/roles/link", map[string]string{
+		"role_ref": "ui-contact-company/ui-contact-role",
+	})
+	env.AssertStatus(linkResp, 200)
+	linkBody := env.ReadBody(linkResp)
+	if !strings.Contains(linkBody, "UI Contact Role") {
+		t.Error("Contact page after link should show the linked role title")
+	}
+}
+
+// TestUI_CreateContactAndThreadViaForm_RedirectToContacts checks that creating a
+// contact via form redirects to /contacts (not /threads)
+func TestUI_CreateContactAndThreadViaForm_RedirectToContacts(t *testing.T) {
+	env := testharness.NewTestEnv(t)
+
+	createResp := env.PostFormFollowRedirect("/contacts/new", map[string]string{
+		"name": "Redirect Test Contact",
+	})
+	env.AssertStatus(createResp, 200)
+
+	// The final URL after redirect should be /contacts (the contacts list page)
+	createBody := env.ReadBody(createResp)
+	if !strings.Contains(createBody, "Redirect Test Contact") {
+		t.Error("After creating contact, /contacts list should show the new contact")
+	}
+}
+

@@ -26,7 +26,16 @@ type RoleRepository interface {
 type ContactRepository interface {
 	Create(ctx context.Context, contact *domain.Contact) error
 	GetByID(ctx context.Context, id string) (*domain.Contact, error)
+	GetBySlug(ctx context.Context, slug string) (*domain.Contact, error)
 	List(ctx context.Context) ([]*domain.Contact, error)
+	UpdateCodeSlug(ctx context.Context, id, code, slug, folderPath string) error
+	CodeExists(ctx context.Context, code string) (bool, error)
+}
+
+// ContactRoleRepository defines operations for contact-role links
+type ContactRoleRepository interface {
+	LinkRole(ctx context.Context, contactID, roleID string) error
+	GetLinkedRoles(ctx context.Context, contactID string) ([]*domain.Role, error)
 }
 
 // ThreadRepository defines operations for thread persistence
@@ -35,9 +44,7 @@ type ThreadRepository interface {
 	GetByID(ctx context.Context, id string) (*domain.Thread, error)
 	GetBySlug(ctx context.Context, slug string) (*domain.Thread, error)
 	List(ctx context.Context) ([]*domain.Thread, error)
-	LinkRole(ctx context.Context, threadID, roleID string) error
-	GetLinkedRoles(ctx context.Context, threadID string) ([]*domain.Role, error)
-	// UpdateCodeSlug updates the code, slug, and folder_path for a thread (used for backfill)
+	// UpdateCodeSlug updates the code, slug, and folder_path for a thread
 	UpdateCodeSlug(ctx context.Context, threadID, code, slug, folderPath string) error
 	// CodeExists checks if a code already exists (for collision detection)
 	CodeExists(ctx context.Context, code string) (bool, error)
@@ -59,16 +66,19 @@ type JobDescriptionRepository interface {
 }
 
 // MeetingV2Repository defines operations for meetings_v2 persistence
-// Meetings in v2 belong to exactly one of: Role OR Thread (XOR)
 type MeetingV2Repository interface {
-	// Create inserts a new meeting (must have either RoleID or ThreadID set, not both)
+	// Create inserts a new meeting
 	Create(ctx context.Context, meeting *domain.MeetingV2) error
 	// GetByID retrieves a meeting by ID
 	GetByID(ctx context.Context, id string) (*domain.MeetingV2, error)
 	// ListByRole retrieves all meetings for a role ordered by occurred_at desc
 	ListByRole(ctx context.Context, roleID string) ([]*domain.MeetingV2, error)
-	// ListByThread retrieves all thread-only meetings for a thread ordered by occurred_at desc
-	ListByThread(ctx context.Context, threadID string) ([]*domain.MeetingV2, error)
+	// ListByContact retrieves all contact meetings ordered by occurred_at desc
+	ListByContact(ctx context.Context, contactID string) ([]*domain.MeetingV2, error)
+	// UpdatePathMD updates the path_md for a meeting
+	UpdatePathMD(ctx context.Context, meetingID, newPath string) error
+	// SetContactID sets the contact_id on a meeting
+	SetContactID(ctx context.Context, meetingID, contactID string) error
 }
 
 // ResumeRepository defines operations for role resume artifacts

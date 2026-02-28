@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 	"os"
@@ -52,6 +51,7 @@ func main() {
 	companyRepo := sqlite.NewCompanyRepo(db)
 	roleRepo := sqlite.NewRoleRepo(db)
 	contactRepo := sqlite.NewContactRepo(db)
+	contactRoleRepo := sqlite.NewContactRoleRepo(db)
 	threadRepo := sqlite.NewThreadRepo(db)
 	meetingRepo := sqlite.NewMeetingRepo(db)
 	meetingV2Repo := sqlite.NewMeetingV2Repo(db)
@@ -64,16 +64,11 @@ func main() {
 
 	// Create services
 	companyService := app.NewCompanyService(companyRepo, roleRepo, meetingRepo, fs)
-	contactService := app.NewContactService(contactRepo)
-	threadService := app.NewThreadService(threadRepo, meetingRepo, companyRepo, roleRepo, contactRepo)
-
-	// Backfill thread codes for existing threads
-	if err := threadService.BackfillThreadCodes(context.Background()); err != nil {
-		log.Printf("Warning: failed to backfill thread codes: %v", err)
-	}
+	contactService := app.NewContactService(contactRepo, contactRoleRepo, companyRepo, roleRepo, fs)
+	threadService := app.NewThreadService(threadRepo, meetingRepo, contactRepo)
 
 	meetingService := app.NewMeetingService(meetingRepo, companyRepo, fs)
-	meetingV2Service := app.NewMeetingV2Service(meetingV2Repo, companyRepo, roleRepo, threadRepo, fs)
+	meetingV2Service := app.NewMeetingV2Service(meetingV2Repo, companyRepo, roleRepo, contactRepo, fs)
 	jdService := app.NewJDService(jdRepo, companyRepo, roleRepo, fs)
 	resumeService := app.NewResumeService(resumeRepo, companyRepo, roleRepo, fs)
 	artifactService := app.NewArtifactService(artifactRepo, companyRepo, roleRepo, fs)
