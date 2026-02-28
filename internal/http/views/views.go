@@ -53,6 +53,8 @@ func statusClass(status string) string {
 		return "offer"
 	case "rejected":
 		return "rejected"
+	case "cancelled":
+		return "cancelled"
 	case "in_progress":
 		return "in-progress"
 	case "hr_interview", "pairing_interview", "design_interview", "take_home_assignment":

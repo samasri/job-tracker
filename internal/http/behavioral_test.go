@@ -927,6 +927,36 @@ func TestBehavioral_RoleStatusAndComputedCompanyStatus(t *testing.T) {
 		t.Errorf("Expected company status 'in_progress' when role reverted to non-terminal, got '%v'", company["status"])
 	}
 
+	// Update role1 to "cancelled" (role2 is still "rejected")
+	updateResp = env.PatchJSON("/api/companies/status-test-company/roles/role-1/status", map[string]string{
+		"status": "cancelled",
+	})
+	env.AssertStatus(updateResp, 200)
+
+	// Company status should be "rejected" (rejected beats cancelled)
+	getCompanyResp = env.Get("/api/companies/status-test-company")
+	env.AssertStatus(getCompanyResp, 200)
+	env.ReadJSON(getCompanyResp, &companyWithRoles)
+	company = companyWithRoles["company"].(map[string]interface{})
+	if company["status"] != "rejected" {
+		t.Errorf("Expected company status 'rejected' when one role cancelled and one rejected, got '%v'", company["status"])
+	}
+
+	// Update role2 to "cancelled" as well
+	updateResp = env.PatchJSON("/api/companies/status-test-company/roles/role-2/status", map[string]string{
+		"status": "cancelled",
+	})
+	env.AssertStatus(updateResp, 200)
+
+	// Company status should now be "cancelled" (all roles cancelled)
+	getCompanyResp = env.Get("/api/companies/status-test-company")
+	env.AssertStatus(getCompanyResp, 200)
+	env.ReadJSON(getCompanyResp, &companyWithRoles)
+	company = companyWithRoles["company"].(map[string]interface{})
+	if company["status"] != "cancelled" {
+		t.Errorf("Expected company status 'cancelled' when all roles cancelled, got '%v'", company["status"])
+	}
+
 	// Test invalid status
 	invalidResp := env.PatchJSON("/api/companies/status-test-company/roles/role-1/status", map[string]string{
 		"status": "invalid_status",

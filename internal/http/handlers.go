@@ -1354,20 +1354,7 @@ func (h *Handlers) HandleRolePage() http.HandlerFunc {
 		successMsg := r.URL.Query().Get("success")
 		errorMsg := r.URL.Query().Get("error")
 
-		// Build list of all statuses for dropdown with friendly labels
-		allStatuses := []struct {
-			Value string
-			Label string
-		}{
-			{"recruiter_reached_out", "Recruiter Reached Out"},
-			{"hr_interview", "HR Interview"},
-			{"pairing_interview", "Pairing Interview"},
-			{"take_home_assignment", "Take Home Assignment"},
-			{"design_interview", "Design Interview"},
-			{"in_progress", "In Progress"},
-			{"offer", "Offer"},
-			{"rejected", "Rejected"},
-		}
+		allStatuses := domain.AllRoleStatusesWithLabels()
 
 		data := map[string]interface{}{
 			"Title":       company.Company.Name + " - " + roleSlug,

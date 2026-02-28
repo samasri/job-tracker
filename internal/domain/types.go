@@ -18,7 +18,23 @@ const (
 	RoleStatusInProgress          RoleStatus = "in_progress"
 	RoleStatusOffer               RoleStatus = "offer"
 	RoleStatusRejected            RoleStatus = "rejected"
+	RoleStatusCancelled           RoleStatus = "cancelled"
 )
+
+// RoleStatusOption pairs a status value with its display label, for use in UI dropdowns
+type RoleStatusOption struct {
+	Value string
+	Label string
+}
+
+// AllRoleStatusesWithLabels returns all valid role statuses with display labels, in display order
+func AllRoleStatusesWithLabels() []RoleStatusOption {
+	options := make([]RoleStatusOption, 0, len(AllRoleStatuses()))
+	for _, s := range AllRoleStatuses() {
+		options = append(options, RoleStatusOption{Value: s.String(), Label: s.Label()})
+	}
+	return options
+}
 
 // AllRoleStatuses returns all valid role statuses in display order
 func AllRoleStatuses() []RoleStatus {
@@ -31,12 +47,39 @@ func AllRoleStatuses() []RoleStatus {
 		RoleStatusInProgress,
 		RoleStatusOffer,
 		RoleStatusRejected,
+		RoleStatusCancelled,
 	}
 }
 
 // String returns the string representation of the status
 func (s RoleStatus) String() string {
 	return string(s)
+}
+
+// Label returns the human-readable display label for the status
+func (s RoleStatus) Label() string {
+	switch s {
+	case RoleStatusRecruiterReachedOut:
+		return "Recruiter Reached Out"
+	case RoleStatusHRInterview:
+		return "HR Interview"
+	case RoleStatusPairingInterview:
+		return "Pairing Interview"
+	case RoleStatusTakeHomeAssignment:
+		return "Take Home Assignment"
+	case RoleStatusDesignInterview:
+		return "Design Interview"
+	case RoleStatusInProgress:
+		return "In Progress"
+	case RoleStatusOffer:
+		return "Offer"
+	case RoleStatusRejected:
+		return "Rejected"
+	case RoleStatusCancelled:
+		return "Cancelled"
+	default:
+		return string(s)
+	}
 }
 
 // ParseRoleStatus parses a string into a RoleStatus, returning an error for invalid values
@@ -56,9 +99,9 @@ func (s RoleStatus) IsValid() bool {
 	return err == nil
 }
 
-// IsTerminal returns true if the status is a terminal state (rejected or offer)
+// IsTerminal returns true if the status is a terminal state (rejected, offer, or cancelled)
 func (s RoleStatus) IsTerminal() bool {
-	return s == RoleStatusRejected || s == RoleStatusOffer
+	return s == RoleStatusRejected || s == RoleStatusOffer || s == RoleStatusCancelled
 }
 
 // CompanyStatus represents the computed status of a company based on its roles
@@ -68,6 +111,7 @@ const (
 	CompanyStatusInProgress CompanyStatus = "in_progress"
 	CompanyStatusOffer      CompanyStatus = "offer"
 	CompanyStatusRejected   CompanyStatus = "rejected"
+	CompanyStatusCancelled  CompanyStatus = "cancelled"
 )
 
 // String returns the string representation of the company status
@@ -77,15 +121,17 @@ func (s CompanyStatus) String() string {
 
 // ComputeCompanyStatus computes the aggregate company status from its roles.
 // Rules:
-// - If ANY role is not in {rejected, offer} => in_progress
+// - If ANY role is not terminal => in_progress
 // - Else if ANY role is offer => offer
-// - Else => rejected
+// - Else if ANY role is rejected => rejected
+// - Else => cancelled (all terminal roles are cancelled)
 func ComputeCompanyStatus(roles []*Role) CompanyStatus {
 	if len(roles) == 0 {
 		return CompanyStatusInProgress
 	}
 
 	hasOffer := false
+	hasRejected := false
 	for _, role := range roles {
 		if !role.Status.IsTerminal() {
 			return CompanyStatusInProgress
@@ -93,12 +139,18 @@ func ComputeCompanyStatus(roles []*Role) CompanyStatus {
 		if role.Status == RoleStatusOffer {
 			hasOffer = true
 		}
+		if role.Status == RoleStatusRejected {
+			hasRejected = true
+		}
 	}
 
 	if hasOffer {
 		return CompanyStatusOffer
 	}
-	return CompanyStatusRejected
+	if hasRejected {
+		return CompanyStatusRejected
+	}
+	return CompanyStatusCancelled
 }
 
 // Company represents a company being tracked
