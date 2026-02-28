@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"time"
 
 	"jobtracker/internal/app"
@@ -1882,10 +1883,12 @@ func (h *Handlers) HandleViewArtifact() http.HandlerFunc {
 		case "pdf":
 			w.Header().Set("Content-Type", "application/pdf")
 			w.Header().Set("Content-Disposition", "inline; filename=\""+name+".pdf\"")
+			w.Header().Set("Content-Length", strconv.Itoa(len(content)))
 			w.Write(content)
 		case "png":
 			w.Header().Set("Content-Type", "image/png")
 			w.Header().Set("Content-Disposition", "inline; filename=\""+name+".png\"")
+			w.Header().Set("Content-Length", strconv.Itoa(len(content)))
 			w.Write(content)
 		case "jsonc":
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -1947,6 +1950,7 @@ th { background: #f4f4f4; }
 			ext := filepath.Ext(artifact.Path)
 			w.Header().Set("Content-Type", "application/octet-stream")
 			w.Header().Set("Content-Disposition", "attachment; filename=\""+name+ext+"\"")
+			w.Header().Set("Content-Length", strconv.Itoa(len(content)))
 			w.Write(content)
 		default:
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")

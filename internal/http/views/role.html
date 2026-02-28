@@ -70,7 +70,7 @@
 
 <div class="form-section">
     <h3>Add/Update Artifact</h3>
-    <form action="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/artifacts" method="POST" enctype="multipart/form-data" id="artifactForm">
+    <form action="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/artifacts" method="POST" enctype="multipart/form-data" id="artifactForm" autocomplete="off">
         <div class="form-row">
             <div class="form-group">
                 <label for="artifact_name">Name</label>
@@ -140,7 +140,7 @@ function toggleArtifactInputs() {
 
 <div class="form-section">
     <h3>Add Meeting</h3>
-    <form action="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/meetings/new" method="POST">
+    <form action="/companies/{{.Company.Slug}}/roles/{{.Role.Slug}}/meetings/new" method="POST" autocomplete="off">
         <div class="form-row">
             <div class="form-group">
                 <label for="meeting_title">Title</label>
