@@ -32,7 +32,6 @@ func NewMeetingService(
 // CreateMeetingInput is the input for creating a meeting
 type CreateMeetingInput struct {
 	CompanySlug string
-	ThreadID    string
 	OccurredAt  string // ISO 8601 format
 	Title       string
 }
@@ -101,13 +100,6 @@ func (s *MeetingService) CreateMeeting(ctx context.Context, input CreateMeetingI
 
 	if err := s.meetingRepo.Create(ctx, meeting); err != nil {
 		return nil, fmt.Errorf("creating meeting record: %w", err)
-	}
-
-	// Link to thread if provided
-	if input.ThreadID != "" {
-		if err := s.meetingRepo.LinkThread(ctx, meetingID, input.ThreadID); err != nil {
-			return nil, fmt.Errorf("linking meeting to thread: %w", err)
-		}
 	}
 
 	return meeting, nil

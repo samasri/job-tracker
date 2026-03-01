@@ -76,6 +76,12 @@ func (s *ContactService) CreateContact(ctx context.Context, input CreateContactI
 	return contact, nil
 }
 
+// RoleWithCompany contains a role with its company info
+type RoleWithCompany struct {
+	Role    *domain.Role
+	Company *domain.Company
+}
+
 // ContactWithDetails contains a contact with its linked roles and meetings
 type ContactWithDetails struct {
 	Contact  *domain.Contact

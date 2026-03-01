@@ -421,23 +421,6 @@ func TestSmoke_HTMLPages(t *testing.T) {
 		t.Error("/contacts/{id} page should contain contact name")
 	}
 
-	// Test GET /threads/{id} redirects to /contacts/{contactID} (follows redirect, lands on contact page)
-	// Create a thread linked to the contact so the redirect goes to the contact
-	threadResp := env.PostJSON("/api/threads", map[string]string{
-		"title":      "HTML Test Thread",
-		"contact_id": contactID,
-	})
-	var thread map[string]interface{}
-	env.ReadJSON(threadResp, &thread)
-	threadID := thread["id"].(string)
-
-	threadPageResp := env.Get("/threads/" + threadID)
-	env.AssertStatus(threadPageResp, 200)
-	threadRedirectBody := env.ReadBody(threadPageResp)
-	if !strings.Contains(threadRedirectBody, "HTML Test Contact") {
-		t.Error("/threads/{id} redirect should land on the owning contact page")
-	}
-
 	// Test 404 for non-existent company
 	notFoundResp := env.Get("/companies/non-existent")
 	env.AssertStatus(notFoundResp, 404)
@@ -592,17 +575,9 @@ func TestUI_CreateMeetingViaForm(t *testing.T) {
 	}
 }
 
-// U3 Behavioral Test: Create contact and thread via UI form
+// U3 Behavioral Test: Create contact via UI form
 func TestUI_CreateContactViaForm(t *testing.T) {
 	env := testharness.NewTestEnv(t)
-
-	// Verify GET /threads redirects to /contacts (follows redirect → 200)
-	threadsResp := env.Get("/threads")
-	env.AssertStatus(threadsResp, 200)
-	threadsBody := env.ReadBody(threadsResp)
-	if !strings.Contains(threadsBody, "Add Contact") {
-		t.Error("/threads redirect to /contacts should show 'Add Contact' form")
-	}
 
 	// Create a contact via UI
 	contactResp := env.PostFormFollowRedirect("/contacts/new", map[string]string{

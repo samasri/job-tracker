@@ -51,10 +51,6 @@ func (s *Server) routes() {
 		r.Post("/contacts/{id}/roles", s.handlers.HandleLinkRoleToContactAPI())
 		r.Post("/contacts/{id}/meetings", s.handlers.HandleCreateContactMeetingAPI())
 
-		// Threads (read-only; meetings and role-linking removed)
-		r.Post("/threads", s.handlers.HandleCreateThread())
-		r.Get("/threads/{id}", s.handlers.HandleGetThread())
-
 		// Meetings (legacy)
 		r.Post("/meetings", s.handlers.HandleCreateMeeting())
 
@@ -88,14 +84,6 @@ func (s *Server) routes() {
 	s.router.Get("/companies/{companySlug}/roles/{roleSlug}/artifacts/{name}", s.handlers.HandleViewArtifact())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/artifacts/{name}/delete", s.handlers.HandleDeleteArtifact())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/meetings/new", s.handlers.HandleCreateRoleMeetingV2Form())
-	// /threads/* redirect to /contacts/*
-	s.router.Get("/threads", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/contacts", http.StatusMovedPermanently)
-	})
-	s.router.Post("/threads/new", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/contacts", http.StatusSeeOther)
-	})
-	s.router.Get("/threads/{id}", s.handlers.HandleThreadPage())
 	s.router.Get("/contacts", s.handlers.HandleContactsPage())
 	s.router.Post("/contacts/new", s.handlers.HandleCreateContactForm())
 	s.router.Get("/contacts/{id}", s.handlers.HandleContactPage())

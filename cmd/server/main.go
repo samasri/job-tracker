@@ -52,7 +52,6 @@ func main() {
 	roleRepo := sqlite.NewRoleRepo(db)
 	contactRepo := sqlite.NewContactRepo(db)
 	contactRoleRepo := sqlite.NewContactRoleRepo(db)
-	threadRepo := sqlite.NewThreadRepo(db)
 	meetingRepo := sqlite.NewMeetingRepo(db)
 	meetingV2Repo := sqlite.NewMeetingV2Repo(db)
 	jdRepo := sqlite.NewJobDescriptionRepo(db)
@@ -65,8 +64,6 @@ func main() {
 	// Create services
 	companyService := app.NewCompanyService(companyRepo, roleRepo, meetingRepo, fs)
 	contactService := app.NewContactService(contactRepo, contactRoleRepo, companyRepo, roleRepo, fs)
-	threadService := app.NewThreadService(threadRepo, meetingRepo, contactRepo)
-
 	meetingService := app.NewMeetingService(meetingRepo, companyRepo, fs)
 	meetingV2Service := app.NewMeetingV2Service(meetingV2Repo, companyRepo, roleRepo, contactRepo, fs)
 	jdService := app.NewJDService(jdRepo, companyRepo, roleRepo, fs)
@@ -75,7 +72,7 @@ func main() {
 	exportService := app.NewExportService(db, cfg.RepoRoot)
 
 	// Create handlers
-	handlers := httpserver.NewHandlers(companyService, contactService, threadService, meetingService, meetingV2Service, jdService, resumeService, artifactService, exportService)
+	handlers := httpserver.NewHandlers(companyService, contactService, meetingService, meetingV2Service, jdService, resumeService, artifactService, exportService)
 
 	// Create HTTP server
 	server := httpserver.NewServer(handlers)

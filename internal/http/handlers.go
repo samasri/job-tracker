@@ -23,7 +23,6 @@ import (
 type Handlers struct {
 	companyService   *app.CompanyService
 	contactService   *app.ContactService
-	threadService    *app.ThreadService
 	meetingService   *app.MeetingService
 	meetingV2Service *app.MeetingV2Service
 	jdService        *app.JDService
@@ -37,7 +36,6 @@ type Handlers struct {
 func NewHandlers(
 	companyService *app.CompanyService,
 	contactService *app.ContactService,
-	threadService *app.ThreadService,
 	meetingService *app.MeetingService,
 	meetingV2Service *app.MeetingV2Service,
 	jdService *app.JDService,
@@ -53,7 +51,6 @@ func NewHandlers(
 	return &Handlers{
 		companyService:   companyService,
 		contactService:   contactService,
-		threadService:    threadService,
 		meetingService:   meetingService,
 		meetingV2Service: meetingV2Service,
 		jdService:        jdService,
@@ -116,16 +113,6 @@ type ContactResponse struct {
 	Roles       []RoleWithCompanyResponse `json:"roles,omitempty"`
 }
 
-// ThreadResponse is the response for a thread
-type ThreadResponse struct {
-	ID         string `json:"id"`
-	Code       string `json:"code,omitempty"`
-	Slug       string `json:"slug,omitempty"`
-	Title      string `json:"title"`
-	ContactID  string `json:"contact_id,omitempty"`
-	FolderPath string `json:"folder_path,omitempty"`
-}
-
 // CompanyWithDetailsResponse is the response for a company with roles and meetings
 type CompanyWithDetailsResponse struct {
 	Company  CompanyResponse   `json:"company"`
@@ -137,14 +124,6 @@ type CompanyWithDetailsResponse struct {
 type RoleWithCompanyResponse struct {
 	Role    RoleResponse    `json:"role"`
 	Company CompanyResponse `json:"company"`
-}
-
-// ThreadWithDetailsResponse is a thread with its meetings and linked roles
-type ThreadWithDetailsResponse struct {
-	Thread     ThreadResponse            `json:"thread"`
-	Meetings   []MeetingResponse         `json:"meetings"`
-	MeetingsV2 []MeetingV2Response       `json:"meetings_v2"`
-	Roles      []RoleWithCompanyResponse `json:"roles"`
 }
 
 // --- Company Handlers ---
@@ -530,91 +509,6 @@ func (h *Handlers) HandleCreateContactMeetingAPI() http.HandlerFunc {
 	}
 }
 
-// --- Thread Handlers ---
-
-// CreateThreadRequest is the request body for creating a thread
-type CreateThreadRequest struct {
-	Title     string `json:"title"`
-	ContactID string `json:"contact_id"`
-}
-
-// HandleCreateThread handles POST /api/threads
-func (h *Handlers) HandleCreateThread() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req CreateThreadRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		if req.Title == "" {
-			http.Error(w, "title is required", http.StatusBadRequest)
-			return
-		}
-
-		thread, err := h.threadService.CreateThread(r.Context(), app.CreateThreadInput{
-			Title:     req.Title,
-			ContactID: req.ContactID,
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(ThreadResponse{
-			ID:         thread.ID,
-			Code:       thread.Code,
-			Slug:       thread.Slug,
-			Title:      thread.Title,
-			ContactID:  thread.ContactID,
-			FolderPath: thread.FolderPath,
-		})
-	}
-}
-
-// HandleGetThread handles GET /api/threads/{id}
-func (h *Handlers) HandleGetThread() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-
-		thread, err := h.threadService.GetThread(r.Context(), id)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if thread == nil {
-			http.Error(w, "thread not found", http.StatusNotFound)
-			return
-		}
-
-		// Legacy meetings
-		meetings := make([]MeetingResponse, 0, len(thread.Meetings))
-		for _, m := range thread.Meetings {
-			meetings = append(meetings, MeetingResponse{
-				ID:         m.ID,
-				OccurredAt: m.OccurredAt.Format(time.RFC3339),
-				Title:      m.Title,
-				CompanyID:  m.CompanyID,
-				PathMD:     m.PathMD,
-			})
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ThreadWithDetailsResponse{
-			Thread: ThreadResponse{
-				ID:        thread.Thread.ID,
-				Title:     thread.Thread.Title,
-				ContactID: thread.Thread.ContactID,
-			},
-			Meetings:   meetings,
-			MeetingsV2: []MeetingV2Response{},
-			Roles:      []RoleWithCompanyResponse{},
-		})
-	}
-}
-
 func splitRoleRef(ref string) []string {
 	for i := 0; i < len(ref); i++ {
 		if ref[i] == '/' {
@@ -629,7 +523,6 @@ func splitRoleRef(ref string) []string {
 // CreateMeetingRequest is the request body for creating a meeting
 type CreateMeetingRequest struct {
 	CompanySlug string `json:"company_slug"`
-	ThreadID    string `json:"thread_id"`
 	OccurredAt  string `json:"occurred_at"`
 	Title       string `json:"title"`
 }
@@ -650,7 +543,6 @@ func (h *Handlers) HandleCreateMeeting() http.HandlerFunc {
 
 		meeting, err := h.meetingService.CreateMeeting(r.Context(), app.CreateMeetingInput{
 			CompanySlug: req.CompanySlug,
-			ThreadID:    req.ThreadID,
 			OccurredAt:  req.OccurredAt,
 			Title:       req.Title,
 		})
@@ -877,21 +769,6 @@ func (h *Handlers) HandleCompanyPage() http.HandlerFunc {
 	}
 }
 
-// HandleThreadPage redirects GET /threads/{id} to the owning contact's page (or /contacts).
-func (h *Handlers) HandleThreadPage() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-
-		thread, err := h.threadService.GetThread(r.Context(), id)
-		if err == nil && thread != nil && thread.Thread.ContactID != "" {
-			http.Redirect(w, r, "/contacts/"+thread.Thread.ContactID, http.StatusFound)
-			return
-		}
-
-		http.Redirect(w, r, "/contacts", http.StatusFound)
-	}
-}
-
 // RoleDropdownItem represents a role for dropdown display
 type RoleDropdownItem struct {
 	CompanySlug string
@@ -1068,7 +945,6 @@ func (h *Handlers) HandleCreateMeetingForm() http.HandlerFunc {
 
 		title := r.FormValue("title")
 		occurredAt := r.FormValue("occurred_at")
-		threadID := r.FormValue("thread_id")
 
 		if title == "" || occurredAt == "" {
 			http.Redirect(w, r, "/companies/"+companySlug+"?error=Title+and+date+are+required", http.StatusSeeOther)
@@ -1081,7 +957,6 @@ func (h *Handlers) HandleCreateMeetingForm() http.HandlerFunc {
 
 		_, err := h.meetingService.CreateMeeting(r.Context(), app.CreateMeetingInput{
 			CompanySlug: companySlug,
-			ThreadID:    threadID,
 			OccurredAt:  occurredAtRFC,
 			Title:       title,
 		})
@@ -1091,57 +966,6 @@ func (h *Handlers) HandleCreateMeetingForm() http.HandlerFunc {
 		}
 
 		http.Redirect(w, r, "/companies/"+companySlug+"?success=Meeting+created", http.StatusSeeOther)
-	}
-}
-
-// ThreadWithContact represents a thread with its optional contact info
-type ThreadWithContact struct {
-	Thread  interface{}
-	Contact interface{}
-}
-
-// HandleThreadsPage handles GET /threads (HTML page)
-func (h *Handlers) HandleThreadsPage() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		threads, err := h.threadService.ListThreads(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Build thread list with contact info
-		var threadList []ThreadWithContact
-		for _, t := range threads {
-			var contact interface{}
-			if t.ContactID != "" {
-				c, _ := h.contactService.GetContact(r.Context(), t.ContactID)
-				contact = c
-			}
-			threadList = append(threadList, ThreadWithContact{
-				Thread:  t,
-				Contact: contact,
-			})
-		}
-
-		// Get contacts for dropdown
-		contacts, _ := h.contactService.ListContacts(r.Context())
-
-		// Check for success/error query params
-		successMsg := r.URL.Query().Get("success")
-		errorMsg := r.URL.Query().Get("error")
-
-		data := map[string]interface{}{
-			"Title":    "Threads",
-			"Threads":  threadList,
-			"Contacts": contacts,
-			"Success":  successMsg,
-			"Error":    errorMsg,
-		}
-
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := h.views.Render(w, "threads", data); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
 	}
 }
 
@@ -1337,35 +1161,6 @@ func (h *Handlers) HandleCreateContactForm() http.HandlerFunc {
 		}
 
 		http.Redirect(w, r, "/contacts?success=Contact+created", http.StatusSeeOther)
-	}
-}
-
-// HandleCreateThreadForm handles POST /threads/new (HTML form)
-func (h *Handlers) HandleCreateThreadForm() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			http.Redirect(w, r, "/threads?error=Invalid+form+data", http.StatusSeeOther)
-			return
-		}
-
-		title := r.FormValue("title")
-		contactID := r.FormValue("contact_id")
-
-		if title == "" {
-			http.Redirect(w, r, "/threads?error=Title+is+required", http.StatusSeeOther)
-			return
-		}
-
-		_, err := h.threadService.CreateThread(r.Context(), app.CreateThreadInput{
-			Title:     title,
-			ContactID: contactID,
-		})
-		if err != nil {
-			http.Redirect(w, r, "/threads?error="+err.Error(), http.StatusSeeOther)
-			return
-		}
-
-		http.Redirect(w, r, "/threads?success=Thread+created", http.StatusSeeOther)
 	}
 }
 
