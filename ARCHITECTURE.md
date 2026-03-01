@@ -347,7 +347,8 @@ erDiagram
     roles ||--o{ role_artifacts : "has"
     roles ||--o{ meetings : "has role meetings"
     contacts ||--o{ meetings : "has contact meetings"
-    contacts }o--o{ roles : "linked via contact_roles"
+    contacts ||--o{ contact_roles : "linked via"
+    roles ||--o{ contact_roles : "linked via"
 ```
 
 ### Key Relationships
@@ -448,14 +449,13 @@ Environment variables (all optional):
 
 ### Security & Deployment
 
-1. **Local-only by default**: Binds to `127.0.0.1`, not `0.0.0.0`
-2. **No authentication**: Designed for personal local use
-3. **No external dependencies at runtime**: SQLite embedded, no external services
-4. **JD viewer security**: Job descriptions are displayed in a sandboxed iframe with strict CSP headers:
+1. **No authentication**: Designed for personal use; bind address is configurable via `JOBTRACKER_ADDR`
+2. **No external dependencies at runtime**: SQLite embedded, no external services
+3. **JD viewer security**: Job descriptions are displayed in a sandboxed iframe with strict CSP headers:
    - `sandbox="allow-same-origin"` on iframe (blocks scripts, forms, popups)
    - CSP: `default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`
    - Only serves JD files linked in the database (not arbitrary filesystem access)
-5. **Resume validation**: Resume JSON input supports JSONC (JSON with Comments):
+4. **Resume validation**: Resume JSON input supports JSONC (JSON with Comments):
    - Single-line comments (`// ...`)
    - Multi-line comments (`/* ... */`)
    - Trailing commas
