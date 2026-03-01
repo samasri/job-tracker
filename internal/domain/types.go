@@ -189,29 +189,6 @@ type Contact struct {
 	UpdatedAt   time.Time
 }
 
-// Thread represents a conversation/relationship container
-type Thread struct {
-	ID         string
-	Code       string // 8-char unique code (e.g., "6PPEZJPW")
-	Slug       string // folder slug: "<contact-slug>-<code>" or "thread-<code>"
-	Title      string
-	ContactID  string // optional
-	FolderPath string // relative path to thread folder (e.g., "data/threads/brent-maclerie-6PPEZJPW")
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-}
-
-// Meeting represents a meeting or conversation
-type Meeting struct {
-	ID         string
-	OccurredAt time.Time
-	Title      string
-	CompanyID  string
-	PathMD     string // relative path to markdown file
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-}
-
 // RoleJobDescription represents JD artifacts for a role
 type RoleJobDescription struct {
 	RoleID   string
@@ -226,9 +203,9 @@ type RoleResume struct {
 	PathPDF  string
 }
 
-// MeetingV2 represents a meeting in the new model where a meeting belongs to
-// exactly one of: Role OR Contact (XOR constraint).
-type MeetingV2 struct {
+// Meeting represents a meeting belonging to
+// exactly one of: Role OR Contact (XOR constraint enforced by DB).
+type Meeting struct {
 	ID         string
 	OccurredAt time.Time
 	Title      string
@@ -240,12 +217,12 @@ type MeetingV2 struct {
 }
 
 // IsRoleMeeting returns true if this is a role meeting
-func (m *MeetingV2) IsRoleMeeting() bool {
+func (m *Meeting) IsRoleMeeting() bool {
 	return m.RoleID != ""
 }
 
 // IsContactMeeting returns true if this is a contact meeting
-func (m *MeetingV2) IsContactMeeting() bool {
+func (m *Meeting) IsContactMeeting() bool {
 	return m.ContactID != ""
 }
 

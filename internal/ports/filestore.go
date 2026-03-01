@@ -14,16 +14,9 @@ type FileStore interface {
 	// CreateRoleFolder creates the role folder structure
 	CreateRoleFolder(ctx context.Context, companySlug, roleSlug string) (folderPath string, err error)
 
-	// CreateMeetingNote creates a meeting note file (legacy, for old meetings table)
-	CreateMeetingNote(ctx context.Context, companySlug, meetingID string, occurredAt, title string) (filePath string, err error)
-
-	// CreateRoleMeetingNote creates a meeting note file for a role meeting (meetings_v2)
+	// CreateRoleMeetingNote creates a meeting note file for a role meeting (meetings)
 	// Path: data/companies/<company>/roles/<role>/meetings/<YYYY-MM-DD>_<title>_<id>.md
 	CreateRoleMeetingNote(ctx context.Context, companySlug, roleSlug, occurredAt, title, meetingID string) (filePath string, err error)
-
-	// CreateThreadMeetingNote creates a meeting note file for a thread-only meeting (meetings_v2)
-	// Path: data/threads/<thread-slug>/<YYYY-MM-DD>_<title>_<id>.md (flattened, no /meetings subfolder)
-	CreateThreadMeetingNote(ctx context.Context, threadSlug, occurredAt, title, meetingID string) (filePath string, err error)
 
 	// CreateContactFolder creates the contact folder structure
 	// Path: data/contacts/<slug>/

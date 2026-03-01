@@ -51,11 +51,8 @@ func (s *Server) routes() {
 		r.Post("/contacts/{id}/roles", s.handlers.HandleLinkRoleToContactAPI())
 		r.Post("/contacts/{id}/meetings", s.handlers.HandleCreateContactMeetingAPI())
 
-		// Meetings (legacy)
-		r.Post("/meetings", s.handlers.HandleCreateMeeting())
-
 		// Meetings V2 - role meetings
-		r.Post("/companies/{companySlug}/roles/{roleSlug}/meetings", s.handlers.HandleCreateRoleMeetingV2())
+		r.Post("/companies/{companySlug}/roles/{roleSlug}/meetings", s.handlers.HandleCreateRoleMeeting())
 
 		// Job Descriptions
 		r.Post("/roles/{companySlug}/{roleSlug}/jd", s.handlers.HandleAttachJD())
@@ -73,7 +70,6 @@ func (s *Server) routes() {
 	s.router.Post("/companies/new", s.handlers.HandleCreateCompanyForm())
 	s.router.Get("/companies/{slug}", s.handlers.HandleCompanyPage())
 	s.router.Post("/companies/{slug}/roles/new", s.handlers.HandleCreateRoleForm())
-	s.router.Post("/companies/{slug}/meetings/new", s.handlers.HandleCreateMeetingForm())
 	s.router.Get("/companies/{companySlug}/roles/{roleSlug}", s.handlers.HandleRolePage())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/status", s.handlers.HandleUpdateRoleStatusForm())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/jd", s.handlers.HandleAttachJDForm())
@@ -83,7 +79,7 @@ func (s *Server) routes() {
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/artifacts", s.handlers.HandleUpsertArtifactForm())
 	s.router.Get("/companies/{companySlug}/roles/{roleSlug}/artifacts/{name}", s.handlers.HandleViewArtifact())
 	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/artifacts/{name}/delete", s.handlers.HandleDeleteArtifact())
-	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/meetings/new", s.handlers.HandleCreateRoleMeetingV2Form())
+	s.router.Post("/companies/{companySlug}/roles/{roleSlug}/meetings/new", s.handlers.HandleCreateRoleMeetingForm())
 	s.router.Get("/contacts", s.handlers.HandleContactsPage())
 	s.router.Post("/contacts/new", s.handlers.HandleCreateContactForm())
 	s.router.Get("/contacts/{id}", s.handlers.HandleContactPage())

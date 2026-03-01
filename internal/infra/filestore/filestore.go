@@ -69,34 +69,6 @@ func (fs *FileStore) CreateRoleFolder(ctx context.Context, companySlug, roleSlug
 	return folderPath, nil
 }
 
-// CreateMeetingNote creates a meeting note file
-// Deprecated: Use CreateRoleMeetingNote or CreateThreadMeetingNote instead.
-// This function is kept for backward compatibility with legacy meetings.
-func (fs *FileStore) CreateMeetingNote(ctx context.Context, companySlug, meetingID string, occurredAt, title string) (string, error) {
-	// Format: YYYY-MM-DD_<title>_<id>.md
-	safeTitle := strings.ReplaceAll(title, " ", "-")
-	safeTitle = strings.ReplaceAll(safeTitle, "/", "-")
-	filename := fmt.Sprintf("%s_%s_%s.md", occurredAt[:10], safeTitle, meetingID)
-
-	filePath := filepath.Join("data", "companies", companySlug, "meetings", filename)
-	absPath := filepath.Join(fs.repoRoot, filePath)
-
-	content := fmt.Sprintf(`# %s
-
-meeting_id: %s
-occurred_at: %s
-
-## Notes
-
-`, title, meetingID, occurredAt)
-
-	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
-		return "", fmt.Errorf("creating meeting note: %w", err)
-	}
-
-	return filePath, nil
-}
-
 // CreateRoleMeetingNote creates a meeting note file for a role meeting
 // Path: data/companies/<company>/roles/<role>/meetings/<YYYY-MM-DD>_<title>_<id>.md
 func (fs *FileStore) CreateRoleMeetingNote(ctx context.Context, companySlug, roleSlug, occurredAt, title, meetingID string) (string, error) {
@@ -126,40 +98,6 @@ occurred_at: %s
 
 	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("creating role meeting note: %w", err)
-	}
-
-	return filePath, nil
-}
-
-// CreateThreadMeetingNote creates a meeting note file for a thread-only meeting
-// Path: data/threads/<thread-slug>/<YYYY-MM-DD>_<title>_<id>.md (flattened, no /meetings subfolder)
-func (fs *FileStore) CreateThreadMeetingNote(ctx context.Context, threadSlug, occurredAt, title, meetingID string) (string, error) {
-	// Format: YYYY-MM-DD_<title>_<id>.md
-	safeTitle := strings.ReplaceAll(title, " ", "-")
-	safeTitle = strings.ReplaceAll(safeTitle, "/", "-")
-	filename := fmt.Sprintf("%s_%s_%s.md", occurredAt[:10], safeTitle, meetingID)
-
-	// Create thread folder if it doesn't exist (flattened - no meetings subfolder)
-	threadDir := filepath.Join("data", "threads", threadSlug)
-	absThreadDir := filepath.Join(fs.repoRoot, threadDir)
-	if err := os.MkdirAll(absThreadDir, 0755); err != nil {
-		return "", fmt.Errorf("creating thread folder: %w", err)
-	}
-
-	filePath := filepath.Join(threadDir, filename)
-	absPath := filepath.Join(fs.repoRoot, filePath)
-
-	content := fmt.Sprintf(`# %s
-
-meeting_id: %s
-occurred_at: %s
-
-## Notes
-
-`, title, meetingID, occurredAt)
-
-	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
-		return "", fmt.Errorf("creating thread meeting note: %w", err)
 	}
 
 	return filePath, nil

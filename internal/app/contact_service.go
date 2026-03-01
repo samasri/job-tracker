@@ -86,11 +86,11 @@ type RoleWithCompany struct {
 type ContactWithDetails struct {
 	Contact  *domain.Contact
 	Roles    []*RoleWithCompany
-	Meetings []*domain.MeetingV2
+	Meetings []*domain.Meeting
 }
 
 // GetContactWithDetails retrieves a contact with its linked roles (with company).
-// Meetings must be fetched separately via meetingV2Service.ListMeetingsByContact.
+// Meetings must be fetched separately via meetingService.ListMeetingsByContact.
 func (s *ContactService) GetContactWithDetails(ctx context.Context, id string) (*ContactWithDetails, error) {
 	contact, err := s.contactRepo.GetByID(ctx, id)
 	if err != nil {

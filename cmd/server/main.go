@@ -53,7 +53,6 @@ func main() {
 	contactRepo := sqlite.NewContactRepo(db)
 	contactRoleRepo := sqlite.NewContactRoleRepo(db)
 	meetingRepo := sqlite.NewMeetingRepo(db)
-	meetingV2Repo := sqlite.NewMeetingV2Repo(db)
 	jdRepo := sqlite.NewJobDescriptionRepo(db)
 	resumeRepo := sqlite.NewResumeRepo(db)
 	artifactRepo := sqlite.NewRoleArtifactRepo(db)
@@ -62,17 +61,16 @@ func main() {
 	fs := filestore.New(cfg.RepoRoot)
 
 	// Create services
-	companyService := app.NewCompanyService(companyRepo, roleRepo, meetingRepo, fs)
+	companyService := app.NewCompanyService(companyRepo, roleRepo, fs)
 	contactService := app.NewContactService(contactRepo, contactRoleRepo, companyRepo, roleRepo, fs)
-	meetingService := app.NewMeetingService(meetingRepo, companyRepo, fs)
-	meetingV2Service := app.NewMeetingV2Service(meetingV2Repo, companyRepo, roleRepo, contactRepo, fs)
+	meetingService := app.NewMeetingService(meetingRepo, companyRepo, roleRepo, contactRepo, fs)
 	jdService := app.NewJDService(jdRepo, companyRepo, roleRepo, fs)
 	resumeService := app.NewResumeService(resumeRepo, companyRepo, roleRepo, fs)
 	artifactService := app.NewArtifactService(artifactRepo, companyRepo, roleRepo, fs)
-	exportService := app.NewExportService(db, cfg.RepoRoot)
+	exportService := app.NewExportService(sqlite.NewExportQuerier(db), cfg.RepoRoot)
 
 	// Create handlers
-	handlers := httpserver.NewHandlers(companyService, contactService, meetingService, meetingV2Service, jdService, resumeService, artifactService, exportService)
+	handlers := httpserver.NewHandlers(companyService, contactService, meetingService, jdService, resumeService, artifactService, exportService)
 
 	// Create HTTP server
 	server := httpserver.NewServer(handlers)

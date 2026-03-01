@@ -34,8 +34,7 @@ type TestEnv struct {
 	// Services (for tests that need direct access)
 	CompanyService   *app.CompanyService
 	ContactService   *app.ContactService
-	MeetingService   *app.MeetingService
-	MeetingV2Service *app.MeetingV2Service
+	MeetingService *app.MeetingService
 	JDService        *app.JDService
 	ResumeService    *app.ResumeService
 	ArtifactService  *app.ArtifactService
@@ -83,7 +82,6 @@ func NewTestEnv(t *testing.T) *TestEnv {
 	contactRepo := sqlite.NewContactRepo(db)
 	contactRoleRepo := sqlite.NewContactRoleRepo(db)
 	meetingRepo := sqlite.NewMeetingRepo(db)
-	meetingV2Repo := sqlite.NewMeetingV2Repo(db)
 	jdRepo := sqlite.NewJobDescriptionRepo(db)
 	resumeRepo := sqlite.NewResumeRepo(db)
 	artifactRepo := sqlite.NewRoleArtifactRepo(db)
@@ -92,17 +90,16 @@ func NewTestEnv(t *testing.T) *TestEnv {
 	fs := filestore.New(repoRoot)
 
 	// Create services
-	companyService := app.NewCompanyService(companyRepo, roleRepo, meetingRepo, fs)
+	companyService := app.NewCompanyService(companyRepo, roleRepo, fs)
 	contactService := app.NewContactService(contactRepo, contactRoleRepo, companyRepo, roleRepo, fs)
-	meetingService := app.NewMeetingService(meetingRepo, companyRepo, fs)
-	meetingV2Service := app.NewMeetingV2Service(meetingV2Repo, companyRepo, roleRepo, contactRepo, fs)
+	meetingService := app.NewMeetingService(meetingRepo, companyRepo, roleRepo, contactRepo, fs)
 	jdService := app.NewJDService(jdRepo, companyRepo, roleRepo, fs)
 	resumeService := app.NewResumeService(resumeRepo, companyRepo, roleRepo, fs)
 	artifactService := app.NewArtifactService(artifactRepo, companyRepo, roleRepo, fs)
-	exportService := app.NewExportService(db, repoRoot)
+	exportService := app.NewExportService(sqlite.NewExportQuerier(db), repoRoot)
 
 	// Create handlers
-	handlers := httpserver.NewHandlers(companyService, contactService, meetingService, meetingV2Service, jdService, resumeService, artifactService, exportService)
+	handlers := httpserver.NewHandlers(companyService, contactService, meetingService, jdService, resumeService, artifactService, exportService)
 
 	// Create HTTP server
 	server := httpserver.NewServer(handlers)
@@ -117,8 +114,7 @@ func NewTestEnv(t *testing.T) *TestEnv {
 		Client:           ts.Client(),
 		CompanyService:   companyService,
 		ContactService:   contactService,
-		MeetingService:   meetingService,
-		MeetingV2Service: meetingV2Service,
+		MeetingService: meetingService,
 		JDService:        jdService,
 		ResumeService:    resumeService,
 		ArtifactService:  artifactService,

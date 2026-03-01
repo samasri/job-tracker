@@ -19,17 +19,25 @@ func NewMeetingRepo(db *DB) *MeetingRepo {
 	return &MeetingRepo{db: db}
 }
 
-// Create inserts a new meeting
+// Create inserts a new meeting into meetings
 func (r *MeetingRepo) Create(ctx context.Context, meeting *domain.Meeting) error {
 	now := time.Now()
 	meeting.CreatedAt = now
 	meeting.UpdatedAt = now
 
+	var roleID, contactID interface{}
+	if meeting.RoleID != "" {
+		roleID = meeting.RoleID
+	}
+	if meeting.ContactID != "" {
+		contactID = meeting.ContactID
+	}
+
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO meetings (id, occurred_at, title, company_id, path_md, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO meetings (id, occurred_at, title, role_id, contact_id, path_md, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		meeting.ID, meeting.OccurredAt.Format(time.RFC3339), meeting.Title,
-		meeting.CompanyID, meeting.PathMD, meeting.CreatedAt, meeting.UpdatedAt)
+		roleID, contactID, meeting.PathMD, meeting.CreatedAt, meeting.UpdatedAt)
 
 	if err != nil {
 		return fmt.Errorf("inserting meeting: %w", err)
@@ -41,11 +49,12 @@ func (r *MeetingRepo) Create(ctx context.Context, meeting *domain.Meeting) error
 func (r *MeetingRepo) GetByID(ctx context.Context, id string) (*domain.Meeting, error) {
 	meeting := &domain.Meeting{}
 	var occurredAtStr string
+	var roleID, contactID sql.NullString
 
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, occurred_at, title, company_id, path_md, created_at, updated_at
+		`SELECT id, occurred_at, title, role_id, contact_id, path_md, created_at, updated_at
 		 FROM meetings WHERE id = ?`, id).Scan(
-		&meeting.ID, &occurredAtStr, &meeting.Title, &meeting.CompanyID,
+		&meeting.ID, &occurredAtStr, &meeting.Title, &roleID, &contactID,
 		&meeting.PathMD, &meeting.CreatedAt, &meeting.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -55,70 +64,93 @@ func (r *MeetingRepo) GetByID(ctx context.Context, id string) (*domain.Meeting, 
 		return nil, fmt.Errorf("querying meeting by id: %w", err)
 	}
 
-	meeting.OccurredAt, _ = time.Parse(time.RFC3339, occurredAtStr)
+	var parseErr error
+	meeting.OccurredAt, parseErr = time.Parse(time.RFC3339, occurredAtStr)
+	if parseErr != nil {
+		return nil, fmt.Errorf("parsing meeting occurred_at %q: %w", occurredAtStr, parseErr)
+	}
+	if roleID.Valid {
+		meeting.RoleID = roleID.String
+	}
+	if contactID.Valid {
+		meeting.ContactID = contactID.String
+	}
+
 	return meeting, nil
 }
 
-// ListByCompany retrieves all meetings for a company ordered by occurred_at desc
-func (r *MeetingRepo) ListByCompany(ctx context.Context, companyID string) ([]*domain.Meeting, error) {
+// ListByRole retrieves all meetings for a role ordered by occurred_at desc
+func (r *MeetingRepo) ListByRole(ctx context.Context, roleID string) ([]*domain.Meeting, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, occurred_at, title, company_id, path_md, created_at, updated_at
-		 FROM meetings WHERE company_id = ? ORDER BY occurred_at DESC`, companyID)
+		`SELECT id, occurred_at, title, role_id, contact_id, path_md, created_at, updated_at
+		 FROM meetings WHERE role_id = ? ORDER BY occurred_at DESC`, roleID)
 	if err != nil {
-		return nil, fmt.Errorf("listing meetings by company: %w", err)
+		return nil, fmt.Errorf("listing meetings by role: %w", err)
 	}
 	defer rows.Close()
 
-	var meetings []*domain.Meeting
-	for rows.Next() {
-		m := &domain.Meeting{}
-		var occurredAtStr string
-		if err := rows.Scan(&m.ID, &occurredAtStr, &m.Title, &m.CompanyID,
-			&m.PathMD, &m.CreatedAt, &m.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scanning meeting: %w", err)
-		}
-		m.OccurredAt, _ = time.Parse(time.RFC3339, occurredAtStr)
-		meetings = append(meetings, m)
-	}
-
-	return meetings, rows.Err()
+	return r.scanMeetings(rows)
 }
 
-// ListByThread retrieves all meetings linked to a thread ordered by occurred_at desc
-func (r *MeetingRepo) ListByThread(ctx context.Context, threadID string) ([]*domain.Meeting, error) {
+// ListByContact retrieves all contact meetings ordered by occurred_at desc
+func (r *MeetingRepo) ListByContact(ctx context.Context, contactID string) ([]*domain.Meeting, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT m.id, m.occurred_at, m.title, m.company_id, m.path_md, m.created_at, m.updated_at
-		 FROM meetings m
-		 INNER JOIN meeting_threads mt ON mt.meeting_id = m.id
-		 WHERE mt.thread_id = ?
-		 ORDER BY m.occurred_at DESC`, threadID)
+		`SELECT id, occurred_at, title, role_id, contact_id, path_md, created_at, updated_at
+		 FROM meetings WHERE contact_id = ? ORDER BY occurred_at DESC`, contactID)
 	if err != nil {
-		return nil, fmt.Errorf("listing meetings by thread: %w", err)
+		return nil, fmt.Errorf("listing meetings by contact: %w", err)
 	}
 	defer rows.Close()
 
-	var meetings []*domain.Meeting
-	for rows.Next() {
-		m := &domain.Meeting{}
-		var occurredAtStr string
-		if err := rows.Scan(&m.ID, &occurredAtStr, &m.Title, &m.CompanyID,
-			&m.PathMD, &m.CreatedAt, &m.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scanning meeting: %w", err)
-		}
-		m.OccurredAt, _ = time.Parse(time.RFC3339, occurredAtStr)
-		meetings = append(meetings, m)
-	}
-
-	return meetings, rows.Err()
+	return r.scanMeetings(rows)
 }
 
-// LinkThread links a meeting to a thread
-func (r *MeetingRepo) LinkThread(ctx context.Context, meetingID, threadID string) error {
+// UpdatePathMD updates the path_md for a meeting
+func (r *MeetingRepo) UpdatePathMD(ctx context.Context, meetingID, newPath string) error {
 	_, err := r.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO meeting_threads (meeting_id, thread_id) VALUES (?, ?)`,
-		meetingID, threadID)
+		`UPDATE meetings SET path_md = ?, updated_at = ? WHERE id = ?`,
+		newPath, time.Now(), meetingID)
 	if err != nil {
-		return fmt.Errorf("linking meeting to thread: %w", err)
+		return fmt.Errorf("updating meeting path_md: %w", err)
 	}
 	return nil
+}
+
+// SetContactID sets the contact_id on an existing meeting
+func (r *MeetingRepo) SetContactID(ctx context.Context, meetingID, contactID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE meetings SET contact_id = ?, updated_at = ? WHERE id = ?`,
+		contactID, time.Now(), meetingID)
+	if err != nil {
+		return fmt.Errorf("setting meeting contact_id: %w", err)
+	}
+	return nil
+}
+
+// scanMeetings is a helper to scan rows into Meeting slice
+func (r *MeetingRepo) scanMeetings(rows *sql.Rows) ([]*domain.Meeting, error) {
+	var meetings []*domain.Meeting
+	for rows.Next() {
+		m := &domain.Meeting{}
+		var occurredAtStr string
+		var roleID, contactID sql.NullString
+		if err := rows.Scan(&m.ID, &occurredAtStr, &m.Title, &roleID, &contactID,
+			&m.PathMD, &m.CreatedAt, &m.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scanning meeting: %w", err)
+		}
+		var parseErr error
+		m.OccurredAt, parseErr = time.Parse(time.RFC3339, occurredAtStr)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parsing meeting occurred_at %q: %w", occurredAtStr, parseErr)
+		}
+		if roleID.Valid {
+			m.RoleID = roleID.String
+		}
+		if contactID.Valid {
+			m.ContactID = contactID.String
+		}
+		meetings = append(meetings, m)
+	}
+
+	return meetings, rows.Err()
 }

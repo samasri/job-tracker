@@ -29,31 +29,34 @@ job-hunter-v2/
 ├── internal/
 │   ├── app/                     # Application services (business logic)
 │   │   ├── company_service.go   # Company + Role operations
-│   │   ├── contact_service.go   # Contact operations
-│   │   ├── thread_service.go    # Thread + role linking
-│   │   ├── meeting_service.go   # Legacy meeting operations (deprecated)
-│   │   ├── meeting_v2_service.go # Role/Thread meeting operations
+│   │   ├── contact_service.go   # Contact operations + role linking
+│   │   ├── meeting_service.go   # Role and contact meeting operations
 │   │   ├── jd_service.go        # Job description attachment
 │   │   ├── resume_service.go    # Resume attachment
-│   │   └── export_service.go    # JSON export
+│   │   ├── artifact_service.go  # Generic role artifact management
+│   │   └── export_service.go    # JSON export (uses ports.ExportQuerier)
 │   ├── config/
 │   │   └── config.go            # Environment-based configuration
 │   ├── domain/
-│   │   ├── types.go             # Domain entities and RoleStatus enum
+│   │   ├── types.go             # Domain entities, RoleStatus enum, ArtifactType enum
 │   │   ├── shortid.go           # 8-char ID generator (Crockford Base32)
-│   │   └── slug.go              # Slugify helpers and thread folder path generation
+│   │   └── slug.go              # Slugify helpers
 │   ├── http/
 │   │   ├── router.go            # Chi router setup, route definitions
-│   │   ├── handlers.go          # HTTP handlers (API + HTML forms)
+│   │   ├── handlers.go          # Handlers struct, response types, shared helpers
+│   │   ├── handlers_companies.go # Company + role API and HTML handlers
+│   │   ├── handlers_contacts.go  # Contact API and HTML handlers
+│   │   ├── handlers_roles.go     # Role detail, JD, resume, artifact, meeting handlers
+│   │   ├── handlers_export.go    # Export API and HTML handlers
 │   │   ├── behavioral_test.go   # End-to-end tests using httptest
 │   │   └── views/
 │   │       ├── views.go         # Template parsing and rendering
 │   │       ├── layout.html      # Base HTML layout with nav + CSS
 │   │       ├── companies.html   # Company list page
 │   │       ├── company.html     # Company detail page
-│   │       ├── threads.html     # Thread list page
-│   │       ├── thread.html      # Thread detail page
 │   │       ├── role.html        # Role detail page
+│   │       ├── contacts.html    # Contact list page
+│   │       ├── contact.html     # Contact detail page
 │   │       └── jd_viewer.html   # JD viewer page (sandboxed iframe)
 │   ├── infra/
 │   │   ├── filestore/
@@ -63,41 +66,53 @@ job-hunter-v2/
 │   │       ├── company_repo.go  # CompanyRepository implementation
 │   │       ├── role_repo.go     # RoleRepository implementation
 │   │       ├── contact_repo.go  # ContactRepository implementation
-│   │       ├── thread_repo.go   # ThreadRepository implementation
-│   │       ├── meeting_repo.go  # Legacy MeetingRepository (deprecated)
-│   │       ├── meeting_v2_repo.go # MeetingV2Repository implementation
+│   │       ├── meeting_repo.go    # MeetingRepository implementation
 │   │       ├── jd_repo.go       # JobDescriptionRepository implementation
 │   │       ├── resume_repo.go   # ResumeRepository implementation
+│   │       ├── artifact_repo.go # ArtifactRepository implementation
+│   │       ├── export_querier.go # ExportQuerier implementation (implements ports.ExportQuerier)
 │   │       └── migrations/
 │   │           ├── 001_initial.go                    # companies, roles
-│   │           ├── 002_contacts_threads_meetings.go  # contacts, threads, meetings, meeting_threads
-│   │           ├── 003_thread_roles.go               # thread_roles join table
+│   │           ├── 002_contacts_threads_meetings.go  # contacts, threads, meetings (historical)
+│   │           ├── 003_thread_roles.go               # thread_roles join table (historical)
 │   │           ├── 004_job_descriptions.go           # role_job_descriptions
 │   │           ├── 005_role_status.go                # role status column
-│   │           ├── 006_meetings_v2.go                # meetings_v2 with XOR constraint
-│   │           ├── 007_thread_code_slug.go           # thread code, slug, folder_path columns
-│   │           └── 008_role_resumes.go               # role_resumes table
+│   │           ├── 006_meetings_v2.go                # meetings table (created as meetings_v2, renamed in 017)
+│   │           ├── 007_thread_code_slug.go           # thread code/slug columns (historical)
+│   │           ├── 008_role_resumes.go               # role_resumes table
+│   │           ├── 009_role_artifacts.go             # role_artifacts table
+│   │           ├── 010_artifact_html_type.go         # html artifact type
+│   │           ├── 011_artifact_markdown_type.go     # markdown artifact type
+│   │           ├── 012_artifact_png_type.go          # png artifact type
+│   │           ├── 013_artifact_file_type.go         # file artifact type
+│   │           ├── 014_contact_infrastructure.go     # contact_roles, meetings contact_id column
+│   │           ├── 015_drop_thread_dependencies.go   # remove thread_id from meetings, drop thread_roles
+│   │           ├── 016_drop_legacy_tables.go         # drop legacy meetings, meeting_threads, threads tables
+│   │           └── 017_rename_meetings_v2.go         # rename meetings_v2 → meetings
 │   ├── ports/
 │   │   ├── repositories.go      # Repository interfaces
-│   │   └── filestore.go         # FileStore interface
+│   │   ├── filestore.go         # FileStore interface
+│   │   └── export.go            # ExportQuerier interface (decouples export_service from sqlite)
 │   └── testharness/
 │       └── harness.go           # Test utilities (temp DB, temp repo, HTTP client)
 ├── data/                        # Filesystem storage (gitignored except structure)
 │   ├── companies/
 │   │   └── {company-slug}/
-│   │       ├── company.md       # Company notes (status computed from roles)
-│   │       ├── roles/
-│   │       │   └── {role-slug}/
-│   │       │       ├── job.html # Job description HTML
-│   │       │       ├── job.pdf  # Job description PDF
-│   │       │       ├── resume/
-│   │       │       │   ├── resume.jsonc  # Resume data JSON
-│   │       │       │   └── resume.pdf   # Resume PDF
-│   │       │       └── meetings/
-│   │       │           └── YYYY-MM-DD_title_<8-char-id>.md  # Role meetings
-│   └── threads/
-│       └── {contact-slug}-{THREADCODE8}/    # e.g., john-smith-6PPEZJPW (or thread-6PPEZJPW if no contact)
-│           └── YYYY-MM-DD_title_<8-char-id>.md  # Thread meetings (flattened, no /meetings subfolder)
+│   │       ├── company.md       # Company notes
+│   │       └── roles/
+│   │           └── {role-slug}/
+│   │               ├── job.html # Job description HTML
+│   │               ├── job.pdf  # Job description PDF
+│   │               ├── resume/
+│   │               │   ├── resume.jsonc  # Resume data (JSON with Comments)
+│   │               │   └── resume.pdf   # Resume PDF
+│   │               ├── artifacts/
+│   │               │   └── {name}.{ext} # Generic role artifacts
+│   │               └── meetings/
+│   │                   └── YYYY-MM-DD_title_<8-char-id>.md  # Role meetings
+│   └── contacts/
+│       └── {contact-slug}-{CODE8}/    # e.g., jane-smith-6PPEZJPW
+│           └── YYYY-MM-DD_title_<8-char-id>.md  # Contact meetings
 └── db/
     ├── index.sqlite             # SQLite database
     └── export.json              # Deterministic export
@@ -110,7 +125,7 @@ job-hunter-v2/
 ```diagram
 ┌─────────────────────────────────────────────────────────────┐
 │                      HTTP Layer                             │
-│  router.go, handlers.go, views/                             │
+│  router.go, handlers*.go, views/                            │
 │  - Route definitions                                        │
 │  - Request parsing, response rendering                      │
 │  - Calls app services                                       │
@@ -131,6 +146,7 @@ job-hunter-v2/
 │  internal/ports/                                            │
 │  - Repository interfaces                                    │
 │  - FileStore interface                                      │
+│  - ExportQuerier interface                                  │
 │  - Decouples app from infrastructure                        │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -139,8 +155,8 @@ job-hunter-v2/
 │                  Infrastructure Layer                       │
 │  internal/infra/sqlite/     internal/infra/filestore/       │
 │  - SQLite repository impls  - Filesystem operations         │
-│  - Migrations               - Creates folders, files        │
-│  - Raw SQL queries          - Reads frontmatter             │
+│  - ExportQuerier impl       - Creates folders, files        │
+│  - Migrations               - Reads frontmatter             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -148,11 +164,23 @@ job-hunter-v2/
 
 | Layer | Responsibility | What it DOES NOT do |
 | ------- | --------------- | --------------------- |
-| `http/handlers` | Parse requests, call services, render responses | Raw SQL, file I/O |
+| `http/handlers*` | Parse requests, call services, render responses | Raw SQL, file I/O |
 | `app/*_service` | Business logic, validation, orchestration | HTTP concerns, raw SQL |
 | `ports/` | Define interfaces | Implementation details |
 | `infra/sqlite/` | SQL queries, DB operations | Business logic, HTTP |
 | `infra/filestore/` | File operations | Business logic, DB access |
+
+### HTTP Handler Split
+
+The HTTP layer is split across four focused files (plus router and shared types):
+
+| File | Contents |
+| ----- | -------- |
+| `handlers.go` | `Handlers` struct, `NewHandlers`, all response types, shared helpers |
+| `handlers_companies.go` | Company + role API endpoints and HTML page handlers |
+| `handlers_contacts.go` | Contact API endpoints and HTML page handlers |
+| `handlers_roles.go` | Role detail, JD, resume, artifact, and meeting handlers |
+| `handlers_export.go` | Export API and export page handlers |
 
 ## Domain Models
 
@@ -188,40 +216,20 @@ type Contact struct {
     Org         string
     LinkedInURL string
     Email       string
+    Code        string    // 8-char unique code (e.g., "6PPEZJPW")
+    Slug        string    // Folder slug: "<contact-slug>-<code>"
+    FolderPath  string    // Relative path to contact folder
     CreatedAt   time.Time
     UpdatedAt   time.Time
 }
 
-// Thread represents a conversation/relationship container
-type Thread struct {
-    ID         string
-    Code       string    // 8-char unique code (e.g., "6PPEZJPW")
-    Slug       string    // Folder slug: "<contact-slug>-<code>" or "thread-<code>"
-    Title      string
-    ContactID  string    // Optional, may be empty
-    FolderPath string    // Relative path to thread folder (e.g., "data/threads/john-smith-6PPEZJPW")
-    CreatedAt  time.Time
-    UpdatedAt  time.Time
-}
-
-// Meeting represents a meeting (DEPRECATED - use MeetingV2)
+// Meeting represents a meeting belonging to exactly one of: Role OR Contact (XOR)
 type Meeting struct {
     ID         string
     OccurredAt time.Time
     Title      string
-    CompanyID  string
-    PathMD     string    // Relative path to markdown file
-    CreatedAt  time.Time
-    UpdatedAt  time.Time
-}
-
-// MeetingV2 represents a meeting tied to either a Role OR a Thread (XOR)
-type MeetingV2 struct {
-    ID         string
-    OccurredAt time.Time
-    Title      string
-    RoleID     string    // Set for role meetings, empty for thread-only meetings
-    ThreadID   string    // Set for thread-only meetings, empty for role meetings
+    RoleID     string    // Set for role meetings, empty for contact meetings
+    ContactID  string    // Set for contact meetings, empty for role meetings
     PathMD     string    // Relative path to markdown file
     CreatedAt  time.Time
     UpdatedAt  time.Time
@@ -239,6 +247,17 @@ type RoleResume struct {
     RoleID   string
     PathJSON string
     PathPDF  string
+}
+
+// RoleArtifact represents a generic artifact attached to a role
+type RoleArtifact struct {
+    ID        string
+    RoleID    string
+    Name      string
+    Type      ArtifactType // pdf, jsonc, text, html, markdown, png, file
+    Path      string
+    CreatedAt time.Time
+    UpdatedAt time.Time
 }
 ```
 
@@ -282,51 +301,53 @@ erDiagram
         DATETIME updated_at
     }
 
+    role_artifacts {
+        TEXT id PK
+        TEXT role_id FK
+        TEXT name
+        TEXT type
+        TEXT path
+        DATETIME created_at
+        DATETIME updated_at
+    }
+
     contacts {
         TEXT id PK
         TEXT name
         TEXT org
         TEXT linkedin_url
         TEXT email
-        DATETIME created_at
-        DATETIME updated_at
-    }
-
-    threads {
-        TEXT id PK
         TEXT code UK
         TEXT slug UK
-        TEXT title
-        TEXT contact_id FK
         TEXT folder_path
         DATETIME created_at
         DATETIME updated_at
     }
 
-    meetings_v2 {
+    contact_roles {
+        TEXT contact_id PK,FK
+        TEXT role_id PK,FK
+        DATETIME created_at
+    }
+
+    meetings {
         TEXT id PK
         TEXT occurred_at
         TEXT title
-        TEXT role_id FK "XOR with thread_id"
-        TEXT thread_id FK "XOR with role_id"
+        TEXT role_id FK "XOR with contact_id"
+        TEXT contact_id FK "XOR with role_id"
         TEXT path_md
         DATETIME created_at
         DATETIME updated_at
     }
 
-    thread_roles {
-        TEXT thread_id PK,FK
-        TEXT role_id PK,FK
-        DATETIME created_at
-    }
-
     companies ||--o{ roles : "has"
     roles ||--o| role_job_descriptions : "has"
     roles ||--o| role_resumes : "has"
-    contacts ||--o{ threads : "owns"
-    roles ||--o{ meetings_v2 : "has role meetings"
-    threads ||--o{ meetings_v2 : "has thread-only meetings"
-    threads }o--o{ roles : "linked via thread_roles"
+    roles ||--o{ role_artifacts : "has"
+    roles ||--o{ meetings : "has role meetings"
+    contacts ||--o{ meetings : "has contact meetings"
+    contacts }o--o{ roles : "linked via contact_roles"
 ```
 
 ### Key Relationships
@@ -334,18 +355,11 @@ erDiagram
 - **Company → Roles**: One company has many roles (1:N)
 - **Role → JobDescription**: One role has at most one JD record (1:1)
 - **Role → Resume**: One role has at most one resume record (1:1)
-- **Contact → Threads**: One contact can have many threads (1:N, optional)
-- **Role → Meetings (v2)**: One role has many meetings (1:N) - role meetings
-- **Thread → Meetings (v2)**: One thread has many meetings (1:N) - thread-only meetings
-- **Meeting XOR Constraint**: A meeting belongs to exactly one of: Role OR Thread (not both, not neither)
-- **Thread ↔ Roles**: Many-to-many via `thread_roles`
-
-### Legacy Tables (deprecated, not used by new code)
-
-The following tables exist but are no longer used by application code:
-
-- `meetings` - legacy meetings table (company_id based)
-- `meeting_threads` - legacy meeting-thread join table (idempotent linking)
+- **Role → Artifacts**: One role has many generic artifacts (1:N)
+- **Role → Meetings**: One role has many meetings (1:N) — role meetings
+- **Contact → Meetings**: One contact has many meetings (1:N) — contact meetings
+- **Meeting XOR Constraint**: A meeting belongs to exactly one of: Role OR Contact (not both, not neither)
+- **Contact ↔ Roles**: Many-to-many via `contact_roles` (idempotent linking)
 
 ## Hybrid Storage Model
 
@@ -353,11 +367,11 @@ The following tables exist but are no longer used by application code:
 | ------ | ------- | ----- |
 | Metadata, relationships, IDs | SQLite (`db/index.sqlite`) | Fast queries, joins, search |
 | Notes, artifacts | Filesystem (`data/`) | Human-readable, easy to edit, git-friendly |
-| Company status | `company.md` frontmatter | Manual editing, visible in UI |
 | Job descriptions | `job.html`, `job.pdf` | Preserve formatting, HTML via textarea |
-| Resumes | `resume/resume.jsonc`, `resume/resume.pdf` | Per-role, single current version, JSON via textarea |
+| Resumes | `resume/resume.jsonc`, `resume/resume.pdf` | Per-role, single current version, JSONC via textarea |
+| Generic artifacts | `artifacts/{name}.{ext}` | Per-role, arbitrary file types |
 | Role meeting notes | `data/companies/{slug}/roles/{role}/meetings/YYYY-MM-DD_title_<id>.md` | Chronological, grouped by role |
-| Thread meeting notes | `data/threads/{thread-slug}/YYYY-MM-DD_title_<id>.md` | Flattened, grouped by thread |
+| Contact meeting notes | `data/contacts/{contact-slug}-{CODE8}/YYYY-MM-DD_title_<id>.md` | Chronological, grouped by contact |
 
 ## Configuration
 
@@ -377,38 +391,43 @@ Environment variables (all optional):
 | -------- | ------ | ------------- |
 | GET | `/health` | Health check |
 | POST | `/api/companies` | Create company |
-| GET | `/api/companies` | List companies |
+| GET | `/api/companies` | List companies (with computed status) |
 | GET | `/api/companies/{slug}` | Get company with roles |
 | POST | `/api/companies/{slug}/roles` | Create role |
+| PATCH | `/api/companies/{companySlug}/roles/{roleSlug}/status` | Update role status |
 | POST | `/api/companies/{companySlug}/roles/{roleSlug}/meetings` | Create role meeting |
 | POST | `/api/contacts` | Create contact |
-| POST | `/api/threads` | Create thread |
-| GET | `/api/threads/{id}` | Get thread with linked roles/meetings |
-| POST | `/api/threads/{id}/roles` | Link role to thread |
-| POST | `/api/threads/{id}/meetings` | Create thread meeting |
+| GET | `/api/contacts/{id}` | Get contact with linked roles |
+| POST | `/api/contacts/{id}/roles` | Link role to contact (idempotent) |
+| POST | `/api/contacts/{id}/meetings` | Create contact meeting |
 | POST | `/api/roles/{companySlug}/{roleSlug}/jd` | Attach JD (multipart) |
 | POST | `/api/export` | Export to `db/export.json` |
+| GET | `/api/export` | Export to `db/export.json` |
 
 ### HTML Pages (Server-rendered)
 
 | Method | Path | Description |
 | -------- | ------ | ------------- |
+| GET | `/` | Redirect to `/companies` |
 | GET | `/companies` | Company list + Add Company form |
 | POST | `/companies/new` | Create company (form) |
 | GET | `/companies/{slug}` | Company detail + Add Role form |
 | POST | `/companies/{slug}/roles/new` | Create role (form) |
-| GET | `/companies/{companySlug}/roles/{roleSlug}` | Role detail + Meetings + Attach JD form |
+| GET | `/companies/{companySlug}/roles/{roleSlug}` | Role detail + meetings + JD/resume/artifact forms |
+| POST | `/companies/{companySlug}/roles/{roleSlug}/status` | Update role status (form) |
 | POST | `/companies/{companySlug}/roles/{roleSlug}/jd` | Attach JD (multipart form) |
 | GET | `/companies/{companySlug}/roles/{roleSlug}/jd` | JD viewer page (sandboxed iframe) |
 | GET | `/companies/{companySlug}/roles/{roleSlug}/jd/raw` | Raw JD HTML with strict CSP headers |
-| POST | `/companies/{companySlug}/roles/{roleSlug}/resume` | Attach resume (JSON via textarea, PDF via file upload) |
+| POST | `/companies/{companySlug}/roles/{roleSlug}/resume` | Attach resume (JSONC textarea + PDF upload) |
+| POST | `/companies/{companySlug}/roles/{roleSlug}/artifacts` | Upsert generic artifact (form) |
+| GET | `/companies/{companySlug}/roles/{roleSlug}/artifacts/{name}` | View artifact |
+| POST | `/companies/{companySlug}/roles/{roleSlug}/artifacts/{name}/delete` | Delete artifact (form) |
 | POST | `/companies/{companySlug}/roles/{roleSlug}/meetings/new` | Create role meeting (form) |
-| GET | `/threads` | Thread list + Add Contact/Thread forms |
-| POST | `/threads/new` | Create thread (form) |
+| GET | `/contacts` | Contact list + Add Contact form |
 | POST | `/contacts/new` | Create contact (form) |
-| GET | `/threads/{id}` | Thread detail + Link Role + Thread Meetings + Role Meetings |
-| POST | `/threads/{id}/roles/link` | Link role to thread (form) |
-| POST | `/threads/{id}/meetings/v2/new` | Create thread meeting (form) |
+| GET | `/contacts/{id}` | Contact detail + link role + contact meetings |
+| POST | `/contacts/{id}/roles/link` | Link role to contact (form) |
+| POST | `/contacts/{id}/meetings/new` | Create contact meeting (form) |
 | POST | `/export` | Export and redirect with success message |
 
 ## Design Values & Non-Negotiables
@@ -417,15 +436,15 @@ Environment variables (all optional):
 
 1. **Single Responsibility**: Handlers call services; services call repos/filestore; repos own SQL; filestore owns filesystem
 2. **Dependency Inversion**: App layer depends on port interfaces, not concrete implementations
-3. **No raw SQL in handlers**: All DB access goes through repositories
+3. **No raw SQL in handlers**: All DB access goes through repositories or the ExportQuerier port
 4. **No business logic in repos**: Repos are pure data access
+5. **Errors propagate**: No silent error swallowing (`_` for errors from IO/DB); all errors surface to the caller
 
 ### Data Principles
 
 1. **Hybrid storage**: DB for relationships/search; filesystem for human-readable content
 2. **Deterministic export**: `db/export.json` should produce identical output for identical data
-3. **Manual status**: Company status is edited in `company.md` frontmatter, not via API
-4. **Relative paths**: All stored paths are relative to repo root
+3. **Relative paths**: All stored paths are relative to repo root
 
 ### Security & Deployment
 
@@ -453,8 +472,7 @@ Environment variables (all optional):
 ```go
 // Example behavioral test pattern
 func TestUI_CreateCompanyViaForm(t *testing.T) {
-    env := testharness.New(t)  // Creates temp DB + temp repo root
-    defer env.Cleanup()
+    env := testharness.NewTestEnv(t)  // Creates temp DB + temp repo root
 
     // POST form to create company
     resp := env.PostFormFollowRedirect("/companies/new", map[string]string{
@@ -462,12 +480,13 @@ func TestUI_CreateCompanyViaForm(t *testing.T) {
         "name": "Test Company",
     })
 
-    // Assert redirect to companies list
-    assert.Equal(t, http.StatusOK, resp.StatusCode)
+    // Assert final page returned OK
+    env.AssertStatus(resp, 200)
 
     // Assert company folder was created
-    _, err := os.Stat(filepath.Join(env.RepoRoot, "data", "companies", "test-company"))
-    assert.NoError(t, err)
+    if !env.FileExists("data/companies/test-company/company.md") {
+        t.Error("company.md should exist")
+    }
 }
 ```
 
@@ -480,7 +499,7 @@ func TestUI_CreateCompanyViaForm(t *testing.T) {
 3. Add repository interface to `internal/ports/repositories.go`
 4. Implement repository in `internal/infra/sqlite/`
 5. Add service to `internal/app/`
-6. Add handlers to `internal/http/handlers.go`
+6. Add handlers to the appropriate `internal/http/handlers_*.go` file
 7. Add routes to `internal/http/router.go`
 8. Add templates to `internal/http/views/`
 9. Add behavioral tests to `internal/http/behavioral_test.go`
@@ -509,4 +528,3 @@ go test ./internal/http -run TestUI_CreateCompanyViaForm -v
 # Access from other devices
 JOBTRACKER_ADDR=0.0.0.0:8080 go run ./cmd/server
 ```
-

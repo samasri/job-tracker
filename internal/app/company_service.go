@@ -14,7 +14,6 @@ import (
 type CompanyService struct {
 	companyRepo ports.CompanyRepository
 	roleRepo    ports.RoleRepository
-	meetingRepo ports.MeetingRepository
 	fileStore   ports.FileStore
 }
 
@@ -22,13 +21,11 @@ type CompanyService struct {
 func NewCompanyService(
 	companyRepo ports.CompanyRepository,
 	roleRepo ports.RoleRepository,
-	meetingRepo ports.MeetingRepository,
 	fileStore ports.FileStore,
 ) *CompanyService {
 	return &CompanyService{
 		companyRepo: companyRepo,
 		roleRepo:    roleRepo,
-		meetingRepo: meetingRepo,
 		fileStore:   fileStore,
 	}
 }
@@ -120,12 +117,11 @@ func (s *CompanyService) CreateRole(ctx context.Context, input CreateRoleInput) 
 	return role, nil
 }
 
-// CompanyWithDetails represents a company with its roles and meetings
+// CompanyWithDetails represents a company with its roles and computed status
 type CompanyWithDetails struct {
-	Company  *domain.Company
-	Roles    []*domain.Role
-	Meetings []*domain.Meeting
-	Status   domain.CompanyStatus
+	Company *domain.Company
+	Roles   []*domain.Role
+	Status  domain.CompanyStatus
 }
 
 // ListCompanies returns all companies with computed status
@@ -153,7 +149,7 @@ func (s *CompanyService) ListCompanies(ctx context.Context) ([]*CompanyWithDetai
 	return result, nil
 }
 
-// GetCompany returns a company by slug with its roles, meetings, and computed status
+// GetCompany returns a company by slug with its roles and computed status
 func (s *CompanyService) GetCompany(ctx context.Context, slug string) (*CompanyWithDetails, error) {
 	company, err := s.companyRepo.GetBySlug(ctx, slug)
 	if err != nil {
@@ -168,16 +164,10 @@ func (s *CompanyService) GetCompany(ctx context.Context, slug string) (*CompanyW
 		return nil, fmt.Errorf("listing roles: %w", err)
 	}
 
-	meetings, err := s.meetingRepo.ListByCompany(ctx, company.ID)
-	if err != nil {
-		return nil, fmt.Errorf("listing meetings: %w", err)
-	}
-
 	return &CompanyWithDetails{
-		Company:  company,
-		Roles:    roles,
-		Meetings: meetings,
-		Status:   domain.ComputeCompanyStatus(roles),
+		Company: company,
+		Roles:   roles,
+		Status:  domain.ComputeCompanyStatus(roles),
 	}, nil
 }
 

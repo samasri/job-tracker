@@ -93,7 +93,7 @@ func TestBehavioral_CreateCompanyAndRole(t *testing.T) {
 	}
 }
 
-// Behavioral Test #2: Create contact + thread + meeting creates note file and links
+// Behavioral Test #2: Create contact + contact meeting creates note file
 func TestBehavioral_CreateContactMeeting(t *testing.T) {
 	env := testharness.NewTestEnv(t)
 
@@ -160,7 +160,7 @@ func TestBehavioral_CreateContactMeeting(t *testing.T) {
 	}
 }
 
-// Behavioral Test #3: One thread links to multiple roles across companies (idempotent)
+// Behavioral Test #3: One contact links to multiple roles across companies (idempotent)
 func TestBehavioral_ContactLinksMultipleRoles(t *testing.T) {
 	env := testharness.NewTestEnv(t)
 
@@ -1013,7 +1013,7 @@ func TestExport_IncludesStatusAndComputedStatus(t *testing.T) {
 	}
 }
 
-// R5 Test: Export includes meetings_v2 data
+// R5 Test: Export includes meetings data
 func TestExport_IncludesMeetingsV2(t *testing.T) {
 	env := testharness.NewTestEnv(t)
 
@@ -1041,11 +1041,11 @@ func TestExport_IncludesMeetingsV2(t *testing.T) {
 	// Export
 	env.PostJSON("/api/export", nil)
 
-	// Verify meetings_v2 section in export
+	// Verify meetings section in export
 	exportContent := env.ReadFile("db/export.json")
 
-	if !strings.Contains(exportContent, `"meetings_v2"`) {
-		t.Error("export.json should contain meetings_v2 section")
+	if !strings.Contains(exportContent, `"meetings"`) {
+		t.Error("export.json should contain meetings section")
 	}
 	if !strings.Contains(exportContent, meetingID) {
 		t.Error("export.json should contain the role meeting ID")
@@ -1054,7 +1054,7 @@ func TestExport_IncludesMeetingsV2(t *testing.T) {
 		t.Error("export.json should contain the role meeting title")
 	}
 
-	// Verify determinism with meetings_v2
+	// Verify determinism with meetings
 	export1 := env.ReadFile("db/export.json")
 	env.PostJSON("/api/export", nil)
 	export2 := env.ReadFile("db/export.json")
@@ -1062,7 +1062,7 @@ func TestExport_IncludesMeetingsV2(t *testing.T) {
 	export1Lines := stripExportedAt(export1)
 	export2Lines := stripExportedAt(export2)
 	if export1Lines != export2Lines {
-		t.Error("Export should be deterministic including meetings_v2 data")
+		t.Error("Export should be deterministic including meetings data")
 	}
 }
 
@@ -1157,9 +1157,9 @@ func TestUI_CreateMeetingWithShortID(t *testing.T) {
 	role := roles[0].(map[string]interface{})
 	roleID := role["id"].(string)
 
-	// Use the MeetingV2Service directly to get the UI-created meeting
+	// Use the MeetingService directly to get the UI-created meeting
 	ctx := context.Background()
-	meetings, err := env.MeetingV2Service.ListMeetingsByRole(ctx, roleID)
+	meetings, err := env.MeetingService.ListMeetingsByRole(ctx, roleID)
 	if err != nil {
 		t.Fatalf("Failed to list meetings: %v", err)
 	}
@@ -1187,7 +1187,7 @@ func TestUI_CreateMeetingWithShortID(t *testing.T) {
 }
 
 // R3 E2E Test: Role meeting creation (v2) creates file under role folder
-func TestMeetingV2_CreateRoleMeeting(t *testing.T) {
+func TestMeeting_CreateRoleMeeting(t *testing.T) {
 	env := testharness.NewTestEnv(t)
 
 	// Create a company
@@ -1249,7 +1249,7 @@ func TestMeetingV2_CreateRoleMeeting(t *testing.T) {
 }
 
 // R3 UI Test: Create role meeting via HTML form
-func TestUI_CreateRoleMeetingV2ViaForm(t *testing.T) {
+func TestUI_CreateRoleMeetingViaForm(t *testing.T) {
 	env := testharness.NewTestEnv(t)
 
 	// Create company and role
@@ -1717,9 +1717,9 @@ func TestUI_CreateContactAndLinkRole(t *testing.T) {
 	}
 }
 
-// TestUI_CreateContactAndThreadViaForm_RedirectToContacts checks that creating a
-// contact via form redirects to /contacts (not /threads)
-func TestUI_CreateContactAndThreadViaForm_RedirectToContacts(t *testing.T) {
+// TestUI_CreateContactViaForm_RedirectToContacts checks that creating a
+// contact via form redirects to /contacts
+func TestUI_CreateContactViaForm_RedirectToContacts(t *testing.T) {
 	env := testharness.NewTestEnv(t)
 
 	createResp := env.PostFormFollowRedirect("/contacts/new", map[string]string{
