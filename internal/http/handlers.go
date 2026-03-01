@@ -7,7 +7,7 @@ import (
 	"jobtracker/internal/http/views"
 )
 
-type Handlers struct {
+type handlers struct {
 	companyService   *app.CompanyService
 	contactService   *app.ContactService
 	meetingService *app.MeetingService
@@ -26,13 +26,13 @@ func NewHandlers(
 	resumeService *app.ResumeService,
 	artifactService *app.ArtifactService,
 	exportService *app.ExportService,
-) *Handlers {
+) *handlers {
 	v, err := views.New()
 	if err != nil {
 		panic("failed to parse templates: " + err.Error())
 	}
 
-	return &Handlers{
+	return &handlers{
 		companyService:   companyService,
 		contactService:   contactService,
 		meetingService: meetingService,
@@ -46,7 +46,7 @@ func NewHandlers(
 
 // --- Response Types ---
 
-type CompanyResponse struct {
+type companyResponse struct {
 	ID         string `json:"id"`
 	Slug       string `json:"slug"`
 	Name       string `json:"name"`
@@ -54,7 +54,7 @@ type CompanyResponse struct {
 	Status     string `json:"status,omitempty"`
 }
 
-type RoleResponse struct {
+type roleResponse struct {
 	ID         string `json:"id"`
 	CompanyID  string `json:"company_id"`
 	Slug       string `json:"slug"`
@@ -62,7 +62,7 @@ type RoleResponse struct {
 	FolderPath string `json:"folder_path"`
 }
 
-type MeetingResponse struct {
+type meetingResponse struct {
 	ID        string `json:"id"`
 	OccurredAt string `json:"occurred_at"`
 	Title     string `json:"title"`
@@ -71,7 +71,7 @@ type MeetingResponse struct {
 	PathMD    string `json:"path_md"`
 }
 
-type ContactResponse struct {
+type contactResponse struct {
 	ID          string                    `json:"id"`
 	Name        string                    `json:"name"`
 	Org         string                    `json:"org,omitempty"`
@@ -80,17 +80,17 @@ type ContactResponse struct {
 	Code        string                    `json:"code,omitempty"`
 	Slug        string                    `json:"slug,omitempty"`
 	FolderPath  string                    `json:"folder_path,omitempty"`
-	Roles       []RoleWithCompanyResponse `json:"roles,omitempty"`
+	Roles       []roleWithCompanyResponse `json:"roles,omitempty"`
 }
 
-type CompanyWithDetailsResponse struct {
-	Company CompanyResponse `json:"company"`
-	Roles   []RoleResponse  `json:"roles"`
+type companyWithDetailsResponse struct {
+	Company companyResponse `json:"company"`
+	Roles   []roleResponse  `json:"roles"`
 }
 
-type RoleWithCompanyResponse struct {
-	Role    RoleResponse    `json:"role"`
-	Company CompanyResponse `json:"company"`
+type roleWithCompanyResponse struct {
+	Role    roleResponse    `json:"role"`
+	Company companyResponse `json:"company"`
 }
 
 // multipartFileReader wraps a multipart file for io.Reader interface
@@ -104,8 +104,8 @@ func (r *multipartFileReader) Read(p []byte) (int, error) {
 	return r.file.Read(p)
 }
 
-// RoleDropdownItem represents a role for dropdown display
-type RoleDropdownItem struct {
+// roleDropdownItem represents a role for dropdown display
+type roleDropdownItem struct {
 	CompanySlug string
 	CompanyName string
 	RoleSlug    string
@@ -121,12 +121,12 @@ func splitRoleRef(ref string) []string {
 	return []string{ref}
 }
 
-func (h *Handlers) getAllRolesForDropdown(ctx context.Context) ([]RoleDropdownItem, error) {
+func (h *handlers) getAllRolesForDropdown(ctx context.Context) ([]roleDropdownItem, error) {
 	companies, err := h.companyService.ListCompanies(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var roles []RoleDropdownItem
+	var roles []roleDropdownItem
 	for _, c := range companies {
 		details, err := h.companyService.GetCompany(ctx, c.Company.Slug)
 		if err != nil {
@@ -134,7 +134,7 @@ func (h *Handlers) getAllRolesForDropdown(ctx context.Context) ([]RoleDropdownIt
 		}
 		if details != nil {
 			for _, r := range details.Roles {
-				roles = append(roles, RoleDropdownItem{
+				roles = append(roles, roleDropdownItem{
 					CompanySlug: c.Company.Slug,
 					CompanyName: c.Company.Name,
 					RoleSlug:    r.Slug,

@@ -8,17 +8,17 @@ import (
 	"jobtracker/internal/ports"
 )
 
-// ExportQuerier implements ports.ExportQuerier using direct SQL queries.
-type ExportQuerier struct {
+// exportQuerier implements ports.ExportQuerier using direct SQL queries.
+type exportQuerier struct {
 	db *DB
 }
 
-// NewExportQuerier creates a new ExportQuerier.
-func NewExportQuerier(db *DB) *ExportQuerier {
-	return &ExportQuerier{db: db}
+// NewExportQuerier creates a new exportQuerier.
+func NewExportQuerier(db *DB) *exportQuerier {
+	return &exportQuerier{db: db}
 }
 
-func (q *ExportQuerier) QueryCompanies(ctx context.Context) ([]ports.ExportCompanyRow, error) {
+func (q *exportQuerier) QueryCompanies(ctx context.Context) ([]ports.ExportCompanyRow, error) {
 	rows, err := q.db.QueryContext(ctx, `SELECT id, slug, name, folder_path, created_at, updated_at FROM companies ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("querying companies: %w", err)
@@ -36,7 +36,7 @@ func (q *ExportQuerier) QueryCompanies(ctx context.Context) ([]ports.ExportCompa
 	return result, rows.Err()
 }
 
-func (q *ExportQuerier) QueryRoles(ctx context.Context) ([]ports.ExportRoleRow, error) {
+func (q *exportQuerier) QueryRoles(ctx context.Context) ([]ports.ExportRoleRow, error) {
 	rows, err := q.db.QueryContext(ctx, `SELECT id, company_id, slug, title, status, folder_path, created_at, updated_at FROM roles ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("querying roles: %w", err)
@@ -54,7 +54,7 @@ func (q *ExportQuerier) QueryRoles(ctx context.Context) ([]ports.ExportRoleRow, 
 	return result, rows.Err()
 }
 
-func (q *ExportQuerier) QueryContacts(ctx context.Context) ([]ports.ExportContactRow, error) {
+func (q *exportQuerier) QueryContacts(ctx context.Context) ([]ports.ExportContactRow, error) {
 	rows, err := q.db.QueryContext(ctx, `SELECT id, name, org, linkedin_url, email, created_at, updated_at FROM contacts ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("querying contacts: %w", err)
@@ -72,7 +72,7 @@ func (q *ExportQuerier) QueryContacts(ctx context.Context) ([]ports.ExportContac
 	return result, rows.Err()
 }
 
-func (q *ExportQuerier) QueryMeetings(ctx context.Context) ([]ports.ExportMeetingRow, error) {
+func (q *exportQuerier) QueryMeetings(ctx context.Context) ([]ports.ExportMeetingRow, error) {
 	rows, err := q.db.QueryContext(ctx, `SELECT id, occurred_at, title, role_id, contact_id, path_md, created_at, updated_at FROM meetings ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("querying meetings: %w", err)
@@ -97,7 +97,7 @@ func (q *ExportQuerier) QueryMeetings(ctx context.Context) ([]ports.ExportMeetin
 	return result, rows.Err()
 }
 
-func (q *ExportQuerier) QueryJobDescriptions(ctx context.Context) ([]ports.ExportJobDescriptionRow, error) {
+func (q *exportQuerier) QueryJobDescriptions(ctx context.Context) ([]ports.ExportJobDescriptionRow, error) {
 	rows, err := q.db.QueryContext(ctx, `SELECT role_id, path_html, path_pdf FROM role_job_descriptions ORDER BY role_id`)
 	if err != nil {
 		return nil, fmt.Errorf("querying job_descriptions: %w", err)
@@ -122,7 +122,7 @@ func (q *ExportQuerier) QueryJobDescriptions(ctx context.Context) ([]ports.Expor
 	return result, rows.Err()
 }
 
-func (q *ExportQuerier) QueryResumes(ctx context.Context) ([]ports.ExportResumeRow, error) {
+func (q *exportQuerier) QueryResumes(ctx context.Context) ([]ports.ExportResumeRow, error) {
 	rows, err := q.db.QueryContext(ctx, `SELECT role_id, path_json, path_pdf FROM role_resumes ORDER BY role_id`)
 	if err != nil {
 		return nil, fmt.Errorf("querying resumes: %w", err)
@@ -147,7 +147,7 @@ func (q *ExportQuerier) QueryResumes(ctx context.Context) ([]ports.ExportResumeR
 	return result, rows.Err()
 }
 
-func (q *ExportQuerier) QueryRoleArtifacts(ctx context.Context) ([]ports.ExportRoleArtifactRow, error) {
+func (q *exportQuerier) QueryRoleArtifacts(ctx context.Context) ([]ports.ExportRoleArtifactRow, error) {
 	rows, err := q.db.QueryContext(ctx, `SELECT id, role_id, name, type, path, created_at, updated_at FROM role_artifacts ORDER BY role_id, name`)
 	if err != nil {
 		return nil, fmt.Errorf("querying role_artifacts: %w", err)

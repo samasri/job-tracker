@@ -10,19 +10,19 @@ import (
 	"jobtracker/internal/domain"
 )
 
-// RoleArtifactRepo implements ports.RoleArtifactRepository
-type RoleArtifactRepo struct {
+// roleArtifactRepo implements ports.RoleArtifactRepository
+type roleArtifactRepo struct {
 	db *DB
 }
 
-// NewRoleArtifactRepo creates a new RoleArtifactRepo
-func NewRoleArtifactRepo(db *DB) *RoleArtifactRepo {
-	return &RoleArtifactRepo{db: db}
+// NewRoleArtifactRepo creates a new roleArtifactRepo
+func NewRoleArtifactRepo(db *DB) *roleArtifactRepo {
+	return &roleArtifactRepo{db: db}
 }
 
 // Upsert creates or updates an artifact by (role_id, name).
 // Returns the artifact with its ID (stable if existing, new if created).
-func (r *RoleArtifactRepo) Upsert(ctx context.Context, artifact *domain.RoleArtifact) (*domain.RoleArtifact, error) {
+func (r *roleArtifactRepo) Upsert(ctx context.Context, artifact *domain.RoleArtifact) (*domain.RoleArtifact, error) {
 	now := time.Now()
 
 	// Check if artifact with same role_id and name exists
@@ -63,7 +63,7 @@ func (r *RoleArtifactRepo) Upsert(ctx context.Context, artifact *domain.RoleArti
 }
 
 // List returns all artifacts for a role, ordered by name ASC
-func (r *RoleArtifactRepo) List(ctx context.Context, roleID string) ([]*domain.RoleArtifact, error) {
+func (r *roleArtifactRepo) List(ctx context.Context, roleID string) ([]*domain.RoleArtifact, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, role_id, name, type, path, created_at, updated_at
 		 FROM role_artifacts WHERE role_id = ? ORDER BY name ASC`, roleID)
@@ -86,7 +86,7 @@ func (r *RoleArtifactRepo) List(ctx context.Context, roleID string) ([]*domain.R
 }
 
 // GetByName retrieves an artifact by role_id and name
-func (r *RoleArtifactRepo) GetByName(ctx context.Context, roleID, name string) (*domain.RoleArtifact, error) {
+func (r *roleArtifactRepo) GetByName(ctx context.Context, roleID, name string) (*domain.RoleArtifact, error) {
 	a := &domain.RoleArtifact{}
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, role_id, name, type, path, created_at, updated_at
@@ -103,7 +103,7 @@ func (r *RoleArtifactRepo) GetByName(ctx context.Context, roleID, name string) (
 }
 
 // Delete removes an artifact by role_id and name
-func (r *RoleArtifactRepo) Delete(ctx context.Context, roleID, name string) error {
+func (r *roleArtifactRepo) Delete(ctx context.Context, roleID, name string) error {
 	_, err := r.db.ExecContext(ctx,
 		`DELETE FROM role_artifacts WHERE role_id = ? AND name = ?`, roleID, name)
 	if err != nil {

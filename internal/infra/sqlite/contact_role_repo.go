@@ -7,18 +7,18 @@ import (
 	"jobtracker/internal/domain"
 )
 
-// ContactRoleRepo implements ports.ContactRoleRepository
-type ContactRoleRepo struct {
+// contactRoleRepo implements ports.ContactRoleRepository
+type contactRoleRepo struct {
 	db *DB
 }
 
-// NewContactRoleRepo creates a new ContactRoleRepo
-func NewContactRoleRepo(db *DB) *ContactRoleRepo {
-	return &ContactRoleRepo{db: db}
+// NewContactRoleRepo creates a new contactRoleRepo
+func NewContactRoleRepo(db *DB) *contactRoleRepo {
+	return &contactRoleRepo{db: db}
 }
 
 // LinkRole links a contact to a role (idempotent via INSERT OR IGNORE)
-func (r *ContactRoleRepo) LinkRole(ctx context.Context, contactID, roleID string) error {
+func (r *contactRoleRepo) LinkRole(ctx context.Context, contactID, roleID string) error {
 	_, err := r.db.ExecContext(ctx,
 		`INSERT OR IGNORE INTO contact_roles (contact_id, role_id) VALUES (?, ?)`,
 		contactID, roleID)
@@ -29,7 +29,7 @@ func (r *ContactRoleRepo) LinkRole(ctx context.Context, contactID, roleID string
 }
 
 // GetLinkedRoles returns all roles linked to a contact, ordered by created_at ASC, role_id ASC
-func (r *ContactRoleRepo) GetLinkedRoles(ctx context.Context, contactID string) ([]*domain.Role, error) {
+func (r *contactRoleRepo) GetLinkedRoles(ctx context.Context, contactID string) ([]*domain.Role, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT ro.id, ro.company_id, ro.slug, ro.title, ro.status, ro.folder_path, ro.created_at, ro.updated_at
 		 FROM roles ro

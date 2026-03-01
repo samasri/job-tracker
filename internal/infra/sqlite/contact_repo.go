@@ -9,18 +9,18 @@ import (
 	"jobtracker/internal/domain"
 )
 
-// ContactRepo implements ports.ContactRepository
-type ContactRepo struct {
+// contactRepo implements ports.ContactRepository
+type contactRepo struct {
 	db *DB
 }
 
-// NewContactRepo creates a new ContactRepo
-func NewContactRepo(db *DB) *ContactRepo {
-	return &ContactRepo{db: db}
+// NewContactRepo creates a new contactRepo
+func NewContactRepo(db *DB) *contactRepo {
+	return &contactRepo{db: db}
 }
 
 // Create inserts a new contact
-func (r *ContactRepo) Create(ctx context.Context, contact *domain.Contact) error {
+func (r *contactRepo) Create(ctx context.Context, contact *domain.Contact) error {
 	now := time.Now()
 	contact.CreatedAt = now
 	contact.UpdatedAt = now
@@ -49,7 +49,7 @@ func (r *ContactRepo) Create(ctx context.Context, contact *domain.Contact) error
 }
 
 // GetByID retrieves a contact by ID
-func (r *ContactRepo) GetByID(ctx context.Context, id string) (*domain.Contact, error) {
+func (r *contactRepo) GetByID(ctx context.Context, id string) (*domain.Contact, error) {
 	contact := &domain.Contact{}
 	var code, slug, folderPath sql.NullString
 
@@ -80,7 +80,7 @@ func (r *ContactRepo) GetByID(ctx context.Context, id string) (*domain.Contact, 
 }
 
 // GetBySlug retrieves a contact by slug
-func (r *ContactRepo) GetBySlug(ctx context.Context, slug string) (*domain.Contact, error) {
+func (r *contactRepo) GetBySlug(ctx context.Context, slug string) (*domain.Contact, error) {
 	contact := &domain.Contact{}
 	var code, folderPath sql.NullString
 
@@ -108,7 +108,7 @@ func (r *ContactRepo) GetBySlug(ctx context.Context, slug string) (*domain.Conta
 }
 
 // List retrieves all contacts ordered by creation date descending
-func (r *ContactRepo) List(ctx context.Context) ([]*domain.Contact, error) {
+func (r *contactRepo) List(ctx context.Context) ([]*domain.Contact, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, name, org, linkedin_url, email, code, slug, folder_path, created_at, updated_at
 		 FROM contacts ORDER BY created_at DESC`)
@@ -141,7 +141,7 @@ func (r *ContactRepo) List(ctx context.Context) ([]*domain.Contact, error) {
 }
 
 // UpdateCodeSlug updates the code, slug, and folder_path for a contact
-func (r *ContactRepo) UpdateCodeSlug(ctx context.Context, id, code, slug, folderPath string) error {
+func (r *contactRepo) UpdateCodeSlug(ctx context.Context, id, code, slug, folderPath string) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE contacts SET code = ?, slug = ?, folder_path = ?, updated_at = ? WHERE id = ?`,
 		code, slug, folderPath, time.Now(), id)
@@ -152,7 +152,7 @@ func (r *ContactRepo) UpdateCodeSlug(ctx context.Context, id, code, slug, folder
 }
 
 // CodeExists checks if a code already exists among contacts
-func (r *ContactRepo) CodeExists(ctx context.Context, code string) (bool, error) {
+func (r *contactRepo) CodeExists(ctx context.Context, code string) (bool, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM contacts WHERE code = ?`, code).Scan(&count)

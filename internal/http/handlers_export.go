@@ -6,7 +6,7 @@ import (
 )
 
 // HandleExport handles POST /api/export
-func (h *Handlers) HandleExport() http.HandlerFunc {
+func (h *handlers) HandleExport() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := h.exportService.Export(r.Context()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -19,7 +19,7 @@ func (h *Handlers) HandleExport() http.HandlerFunc {
 }
 
 // HandleExportPage handles POST /export (HTML form, redirects with success message)
-func (h *Handlers) HandleExportPage() http.HandlerFunc {
+func (h *handlers) HandleExportPage() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := h.exportService.Export(r.Context()); err != nil {
 			http.Redirect(w, r, "/companies?error=Export+failed:+"+err.Error(), http.StatusSeeOther)

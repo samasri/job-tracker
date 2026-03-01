@@ -16,15 +16,15 @@ import (
 	"github.com/yuin/goldmark"
 )
 
-// JDResponse is the response for a job description
-type JDResponse struct {
+// jdResponse is the response for a job description
+type jdResponse struct {
 	RoleID   string `json:"role_id"`
 	PathHTML string `json:"path_html,omitempty"`
 	PathPDF  string `json:"path_pdf,omitempty"`
 }
 
 // HandleAttachJD handles POST /api/roles/{companySlug}/{roleSlug}/jd
-func (h *Handlers) HandleAttachJD() http.HandlerFunc {
+func (h *handlers) HandleAttachJD() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
@@ -65,7 +65,7 @@ func (h *Handlers) HandleAttachJD() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(JDResponse{
+		json.NewEncoder(w).Encode(jdResponse{
 			RoleID:   jd.RoleID,
 			PathHTML: jd.PathHTML,
 			PathPDF:  jd.PathPDF,
@@ -73,19 +73,19 @@ func (h *Handlers) HandleAttachJD() http.HandlerFunc {
 	}
 }
 
-// CreateRoleMeetingRequest is the request body for creating a role meeting (v2)
-type CreateRoleMeetingRequest struct {
+// createRoleMeetingRequest is the request body for creating a role meeting (v2)
+type createRoleMeetingRequest struct {
 	OccurredAt string `json:"occurred_at"`
 	Title      string `json:"title"`
 }
 
 // HandleCreateRoleMeeting handles POST /api/companies/{companySlug}/roles/{roleSlug}/meetings (JSON)
-func (h *Handlers) HandleCreateRoleMeeting() http.HandlerFunc {
+func (h *handlers) HandleCreateRoleMeeting() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
 
-		var req CreateRoleMeetingRequest
+		var req createRoleMeetingRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
@@ -109,7 +109,7 @@ func (h *Handlers) HandleCreateRoleMeeting() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(MeetingResponse{
+		json.NewEncoder(w).Encode(meetingResponse{
 			ID:         meeting.ID,
 			OccurredAt: meeting.OccurredAt.Format(time.RFC3339),
 			Title:      meeting.Title,
@@ -120,7 +120,7 @@ func (h *Handlers) HandleCreateRoleMeeting() http.HandlerFunc {
 }
 
 // HandleRolePage handles GET /companies/{companySlug}/roles/{roleSlug} (HTML page)
-func (h *Handlers) HandleRolePage() http.HandlerFunc {
+func (h *handlers) HandleRolePage() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
@@ -213,7 +213,7 @@ func (h *Handlers) HandleRolePage() http.HandlerFunc {
 }
 
 // HandleUpdateRoleStatusForm handles POST /companies/{companySlug}/roles/{roleSlug}/status (HTML form)
-func (h *Handlers) HandleUpdateRoleStatusForm() http.HandlerFunc {
+func (h *handlers) HandleUpdateRoleStatusForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
@@ -245,7 +245,7 @@ func (h *Handlers) HandleUpdateRoleStatusForm() http.HandlerFunc {
 }
 
 // HandleAttachJDForm handles POST /companies/{companySlug}/roles/{roleSlug}/jd (HTML form)
-func (h *Handlers) HandleAttachJDForm() http.HandlerFunc {
+func (h *handlers) HandleAttachJDForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
@@ -290,7 +290,7 @@ func (h *Handlers) HandleAttachJDForm() http.HandlerFunc {
 }
 
 // HandleAttachResumeForm handles POST /companies/{companySlug}/roles/{roleSlug}/resume (HTML form)
-func (h *Handlers) HandleAttachResumeForm() http.HandlerFunc {
+func (h *handlers) HandleAttachResumeForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
@@ -335,7 +335,7 @@ func (h *Handlers) HandleAttachResumeForm() http.HandlerFunc {
 }
 
 // HandleViewJD handles GET /companies/{companySlug}/roles/{roleSlug}/jd (JD viewer page)
-func (h *Handlers) HandleViewJD() http.HandlerFunc {
+func (h *handlers) HandleViewJD() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
@@ -386,7 +386,7 @@ func (h *Handlers) HandleViewJD() http.HandlerFunc {
 }
 
 // HandleViewJDRaw handles GET /companies/{companySlug}/roles/{roleSlug}/jd/raw (raw HTML with CSP)
-func (h *Handlers) HandleViewJDRaw() http.HandlerFunc {
+func (h *handlers) HandleViewJDRaw() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
@@ -439,7 +439,7 @@ func (h *Handlers) HandleViewJDRaw() http.HandlerFunc {
 }
 
 // HandleCreateRoleMeetingForm handles POST /companies/{companySlug}/roles/{roleSlug}/meetings/new (HTML form)
-func (h *Handlers) HandleCreateRoleMeetingForm() http.HandlerFunc {
+func (h *handlers) HandleCreateRoleMeetingForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
@@ -477,7 +477,7 @@ func (h *Handlers) HandleCreateRoleMeetingForm() http.HandlerFunc {
 }
 
 // HandleUpsertArtifactForm handles POST /companies/{companySlug}/roles/{roleSlug}/artifacts (HTML form)
-func (h *Handlers) HandleUpsertArtifactForm() http.HandlerFunc {
+func (h *handlers) HandleUpsertArtifactForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
@@ -544,7 +544,7 @@ func (h *Handlers) HandleUpsertArtifactForm() http.HandlerFunc {
 }
 
 // HandleViewArtifact handles GET /companies/{companySlug}/roles/{roleSlug}/artifacts/{name}
-func (h *Handlers) HandleViewArtifact() http.HandlerFunc {
+func (h *handlers) HandleViewArtifact() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
@@ -647,7 +647,7 @@ th { background: #f4f4f4; }
 }
 
 // HandleDeleteArtifact handles POST /companies/{companySlug}/roles/{roleSlug}/artifacts/{name}/delete
-func (h *Handlers) HandleDeleteArtifact() http.HandlerFunc {
+func (h *handlers) HandleDeleteArtifact() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")

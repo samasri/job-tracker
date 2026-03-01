@@ -9,18 +9,18 @@ import (
 	"jobtracker/internal/domain"
 )
 
-// MeetingRepo implements ports.MeetingRepository
-type MeetingRepo struct {
+// meetingRepo implements ports.MeetingRepository
+type meetingRepo struct {
 	db *DB
 }
 
-// NewMeetingRepo creates a new MeetingRepo
-func NewMeetingRepo(db *DB) *MeetingRepo {
-	return &MeetingRepo{db: db}
+// NewMeetingRepo creates a new meetingRepo
+func NewMeetingRepo(db *DB) *meetingRepo {
+	return &meetingRepo{db: db}
 }
 
 // Create inserts a new meeting into meetings
-func (r *MeetingRepo) Create(ctx context.Context, meeting *domain.Meeting) error {
+func (r *meetingRepo) Create(ctx context.Context, meeting *domain.Meeting) error {
 	now := time.Now()
 	meeting.CreatedAt = now
 	meeting.UpdatedAt = now
@@ -46,7 +46,7 @@ func (r *MeetingRepo) Create(ctx context.Context, meeting *domain.Meeting) error
 }
 
 // GetByID retrieves a meeting by ID
-func (r *MeetingRepo) GetByID(ctx context.Context, id string) (*domain.Meeting, error) {
+func (r *meetingRepo) GetByID(ctx context.Context, id string) (*domain.Meeting, error) {
 	meeting := &domain.Meeting{}
 	var occurredAtStr string
 	var roleID, contactID sql.NullString
@@ -80,7 +80,7 @@ func (r *MeetingRepo) GetByID(ctx context.Context, id string) (*domain.Meeting, 
 }
 
 // ListByRole retrieves all meetings for a role ordered by occurred_at desc
-func (r *MeetingRepo) ListByRole(ctx context.Context, roleID string) ([]*domain.Meeting, error) {
+func (r *meetingRepo) ListByRole(ctx context.Context, roleID string) ([]*domain.Meeting, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, occurred_at, title, role_id, contact_id, path_md, created_at, updated_at
 		 FROM meetings WHERE role_id = ? ORDER BY occurred_at DESC`, roleID)
@@ -93,7 +93,7 @@ func (r *MeetingRepo) ListByRole(ctx context.Context, roleID string) ([]*domain.
 }
 
 // ListByContact retrieves all contact meetings ordered by occurred_at desc
-func (r *MeetingRepo) ListByContact(ctx context.Context, contactID string) ([]*domain.Meeting, error) {
+func (r *meetingRepo) ListByContact(ctx context.Context, contactID string) ([]*domain.Meeting, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, occurred_at, title, role_id, contact_id, path_md, created_at, updated_at
 		 FROM meetings WHERE contact_id = ? ORDER BY occurred_at DESC`, contactID)
@@ -106,7 +106,7 @@ func (r *MeetingRepo) ListByContact(ctx context.Context, contactID string) ([]*d
 }
 
 // UpdatePathMD updates the path_md for a meeting
-func (r *MeetingRepo) UpdatePathMD(ctx context.Context, meetingID, newPath string) error {
+func (r *meetingRepo) UpdatePathMD(ctx context.Context, meetingID, newPath string) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE meetings SET path_md = ?, updated_at = ? WHERE id = ?`,
 		newPath, time.Now(), meetingID)
@@ -117,7 +117,7 @@ func (r *MeetingRepo) UpdatePathMD(ctx context.Context, meetingID, newPath strin
 }
 
 // SetContactID sets the contact_id on an existing meeting
-func (r *MeetingRepo) SetContactID(ctx context.Context, meetingID, contactID string) error {
+func (r *meetingRepo) SetContactID(ctx context.Context, meetingID, contactID string) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE meetings SET contact_id = ?, updated_at = ? WHERE id = ?`,
 		contactID, time.Now(), meetingID)
@@ -128,7 +128,7 @@ func (r *MeetingRepo) SetContactID(ctx context.Context, meetingID, contactID str
 }
 
 // scanMeetings is a helper to scan rows into Meeting slice
-func (r *MeetingRepo) scanMeetings(rows *sql.Rows) ([]*domain.Meeting, error) {
+func (r *meetingRepo) scanMeetings(rows *sql.Rows) ([]*domain.Meeting, error) {
 	var meetings []*domain.Meeting
 	for rows.Next() {
 		m := &domain.Meeting{}

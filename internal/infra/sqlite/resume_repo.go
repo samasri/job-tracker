@@ -9,18 +9,18 @@ import (
 	"jobtracker/internal/domain"
 )
 
-// ResumeRepo implements ports.ResumeRepository
-type ResumeRepo struct {
+// resumeRepo implements ports.ResumeRepository
+type resumeRepo struct {
 	db *DB
 }
 
-// NewResumeRepo creates a new ResumeRepo
-func NewResumeRepo(db *DB) *ResumeRepo {
-	return &ResumeRepo{db: db}
+// NewResumeRepo creates a new resumeRepo
+func NewResumeRepo(db *DB) *resumeRepo {
+	return &resumeRepo{db: db}
 }
 
 // Save upserts a role resume record
-func (r *ResumeRepo) Save(ctx context.Context, resume *domain.RoleResume) error {
+func (r *resumeRepo) Save(ctx context.Context, resume *domain.RoleResume) error {
 	now := time.Now()
 
 	_, err := r.db.ExecContext(ctx,
@@ -39,7 +39,7 @@ func (r *ResumeRepo) Save(ctx context.Context, resume *domain.RoleResume) error 
 }
 
 // GetByRoleID retrieves a role resume by role ID
-func (r *ResumeRepo) GetByRoleID(ctx context.Context, roleID string) (*domain.RoleResume, error) {
+func (r *resumeRepo) GetByRoleID(ctx context.Context, roleID string) (*domain.RoleResume, error) {
 	resume := &domain.RoleResume{RoleID: roleID}
 	var pathJSON, pathPDF sql.NullString
 

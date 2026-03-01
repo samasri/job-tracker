@@ -12,23 +12,23 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// CompanyListItem represents a company for the list view
-type CompanyListItem struct {
+// companyListItem represents a company for the list view
+type companyListItem struct {
 	Company   interface{}
 	Status    string
 	LastTouch string
 }
 
-// CreateCompanyRequest is the request body for creating a company
-type CreateCompanyRequest struct {
+// createCompanyRequest is the request body for creating a company
+type createCompanyRequest struct {
 	Slug string `json:"slug"`
 	Name string `json:"name"`
 }
 
 // HandleCreateCompany handles POST /api/companies
-func (h *Handlers) HandleCreateCompany() http.HandlerFunc {
+func (h *handlers) HandleCreateCompany() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req CreateCompanyRequest
+		var req createCompanyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
@@ -50,7 +50,7 @@ func (h *Handlers) HandleCreateCompany() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(CompanyResponse{
+		json.NewEncoder(w).Encode(companyResponse{
 			ID:         company.ID,
 			Slug:       company.Slug,
 			Name:       company.Name,
@@ -60,7 +60,7 @@ func (h *Handlers) HandleCreateCompany() http.HandlerFunc {
 }
 
 // HandleListCompanies handles GET /api/companies
-func (h *Handlers) HandleListCompanies() http.HandlerFunc {
+func (h *handlers) HandleListCompanies() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companies, err := h.companyService.ListCompanies(r.Context())
 		if err != nil {
@@ -68,9 +68,9 @@ func (h *Handlers) HandleListCompanies() http.HandlerFunc {
 			return
 		}
 
-		result := make([]CompanyResponse, 0, len(companies))
+		result := make([]companyResponse, 0, len(companies))
 		for _, c := range companies {
-			result = append(result, CompanyResponse{
+			result = append(result, companyResponse{
 				ID:         c.Company.ID,
 				Slug:       c.Company.Slug,
 				Name:       c.Company.Name,
@@ -85,7 +85,7 @@ func (h *Handlers) HandleListCompanies() http.HandlerFunc {
 }
 
 // HandleGetCompany handles GET /api/companies/{slug}
-func (h *Handlers) HandleGetCompany() http.HandlerFunc {
+func (h *handlers) HandleGetCompany() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := chi.URLParam(r, "slug")
 
@@ -99,9 +99,9 @@ func (h *Handlers) HandleGetCompany() http.HandlerFunc {
 			return
 		}
 
-		roles := make([]RoleResponse, 0, len(company.Roles))
+		roles := make([]roleResponse, 0, len(company.Roles))
 		for _, role := range company.Roles {
-			roles = append(roles, RoleResponse{
+			roles = append(roles, roleResponse{
 				ID:         role.ID,
 				CompanyID:  role.CompanyID,
 				Slug:       role.Slug,
@@ -111,8 +111,8 @@ func (h *Handlers) HandleGetCompany() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(CompanyWithDetailsResponse{
-			Company: CompanyResponse{
+		json.NewEncoder(w).Encode(companyWithDetailsResponse{
+			Company: companyResponse{
 				ID:         company.Company.ID,
 				Slug:       company.Company.Slug,
 				Name:       company.Company.Name,
@@ -124,18 +124,18 @@ func (h *Handlers) HandleGetCompany() http.HandlerFunc {
 	}
 }
 
-// CreateRoleRequest is the request body for creating a role
-type CreateRoleRequest struct {
+// createRoleRequest is the request body for creating a role
+type createRoleRequest struct {
 	Slug  string `json:"slug"`
 	Title string `json:"title"`
 }
 
 // HandleCreateRole handles POST /api/companies/{slug}/roles
-func (h *Handlers) HandleCreateRole() http.HandlerFunc {
+func (h *handlers) HandleCreateRole() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "slug")
 
-		var req CreateRoleRequest
+		var req createRoleRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
@@ -158,7 +158,7 @@ func (h *Handlers) HandleCreateRole() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(RoleResponse{
+		json.NewEncoder(w).Encode(roleResponse{
 			ID:         role.ID,
 			CompanyID:  role.CompanyID,
 			Slug:       role.Slug,
@@ -168,18 +168,18 @@ func (h *Handlers) HandleCreateRole() http.HandlerFunc {
 	}
 }
 
-// UpdateRoleStatusRequest is the request body for updating role status
-type UpdateRoleStatusRequest struct {
+// updateRoleStatusRequest is the request body for updating role status
+type updateRoleStatusRequest struct {
 	Status string `json:"status"`
 }
 
 // HandleUpdateRoleStatus handles PATCH /api/companies/{companySlug}/roles/{roleSlug}/status
-func (h *Handlers) HandleUpdateRoleStatus() http.HandlerFunc {
+func (h *handlers) HandleUpdateRoleStatus() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "companySlug")
 		roleSlug := chi.URLParam(r, "roleSlug")
 
-		var req UpdateRoleStatusRequest
+		var req updateRoleStatusRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
@@ -206,7 +206,7 @@ func (h *Handlers) HandleUpdateRoleStatus() http.HandlerFunc {
 }
 
 // HandleCompaniesPage handles GET /companies (HTML page)
-func (h *Handlers) HandleCompaniesPage() http.HandlerFunc {
+func (h *handlers) HandleCompaniesPage() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		items, err := h.buildCompanyListItems(r)
 		if err != nil {
@@ -232,7 +232,7 @@ func (h *Handlers) HandleCompaniesPage() http.HandlerFunc {
 }
 
 // HandleCompanyPage handles GET /companies/{slug} (HTML page)
-func (h *Handlers) HandleCompanyPage() http.HandlerFunc {
+func (h *handlers) HandleCompanyPage() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := chi.URLParam(r, "slug")
 
@@ -266,7 +266,7 @@ func (h *Handlers) HandleCompanyPage() http.HandlerFunc {
 }
 
 // HandleCreateCompanyForm handles POST /companies/new (HTML form)
-func (h *Handlers) HandleCreateCompanyForm() http.HandlerFunc {
+func (h *handlers) HandleCreateCompanyForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			h.renderCompaniesPageWithError(w, r, "Invalid form data", "", "")
@@ -295,7 +295,7 @@ func (h *Handlers) HandleCreateCompanyForm() http.HandlerFunc {
 }
 
 // HandleCreateRoleForm handles POST /companies/{slug}/roles/new (HTML form)
-func (h *Handlers) HandleCreateRoleForm() http.HandlerFunc {
+func (h *handlers) HandleCreateRoleForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		companySlug := chi.URLParam(r, "slug")
 
@@ -326,13 +326,13 @@ func (h *Handlers) HandleCreateRoleForm() http.HandlerFunc {
 	}
 }
 
-func (h *Handlers) buildCompanyListItems(r *http.Request) ([]CompanyListItem, error) {
+func (h *handlers) buildCompanyListItems(r *http.Request) ([]companyListItem, error) {
 	companies, err := h.companyService.ListCompanies(r.Context())
 	if err != nil {
 		return nil, err
 	}
 
-	items := make([]CompanyListItem, 0, len(companies))
+	items := make([]companyListItem, 0, len(companies))
 	for _, c := range companies {
 		var lastTouch string
 		var latest time.Time
@@ -351,7 +351,7 @@ func (h *Handlers) buildCompanyListItems(r *http.Request) ([]CompanyListItem, er
 			lastTouch = latest.Format("2006-01-02")
 		}
 
-		items = append(items, CompanyListItem{
+		items = append(items, companyListItem{
 			Company:   c.Company,
 			Status:    c.Status.String(),
 			LastTouch: lastTouch,
@@ -371,7 +371,7 @@ func (h *Handlers) buildCompanyListItems(r *http.Request) ([]CompanyListItem, er
 	return items, nil
 }
 
-func (h *Handlers) renderCompaniesPageWithError(w http.ResponseWriter, r *http.Request, errMsg, formSlug, formName string) {
+func (h *handlers) renderCompaniesPageWithError(w http.ResponseWriter, r *http.Request, errMsg, formSlug, formName string) {
 	items, err := h.buildCompanyListItems(r)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("loading companies: %s; original error: %s", err.Error(), errMsg), http.StatusInternalServerError)

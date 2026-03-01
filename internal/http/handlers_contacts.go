@@ -11,8 +11,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// CreateContactRequest is the request body for creating a contact
-type CreateContactRequest struct {
+// createContactRequest is the request body for creating a contact
+type createContactRequest struct {
 	Name        string `json:"name"`
 	Org         string `json:"org"`
 	LinkedInURL string `json:"linkedin_url"`
@@ -20,9 +20,9 @@ type CreateContactRequest struct {
 }
 
 // HandleCreateContact handles POST /api/contacts
-func (h *Handlers) HandleCreateContact() http.HandlerFunc {
+func (h *handlers) HandleCreateContact() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req CreateContactRequest
+		var req createContactRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
@@ -46,7 +46,7 @@ func (h *Handlers) HandleCreateContact() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(ContactResponse{
+		json.NewEncoder(w).Encode(contactResponse{
 			ID:          contact.ID,
 			Name:        contact.Name,
 			Org:         contact.Org,
@@ -60,7 +60,7 @@ func (h *Handlers) HandleCreateContact() http.HandlerFunc {
 }
 
 // HandleGetContactAPI handles GET /api/contacts/{id}
-func (h *Handlers) HandleGetContactAPI() http.HandlerFunc {
+func (h *handlers) HandleGetContactAPI() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 
@@ -74,17 +74,17 @@ func (h *Handlers) HandleGetContactAPI() http.HandlerFunc {
 			return
 		}
 
-		roles := make([]RoleWithCompanyResponse, 0, len(details.Roles))
+		roles := make([]roleWithCompanyResponse, 0, len(details.Roles))
 		for _, rc := range details.Roles {
-			roles = append(roles, RoleWithCompanyResponse{
-				Role: RoleResponse{
+			roles = append(roles, roleWithCompanyResponse{
+				Role: roleResponse{
 					ID:         rc.Role.ID,
 					CompanyID:  rc.Role.CompanyID,
 					Slug:       rc.Role.Slug,
 					Title:      rc.Role.Title,
 					FolderPath: rc.Role.FolderPath,
 				},
-				Company: CompanyResponse{
+				Company: companyResponse{
 					ID:         rc.Company.ID,
 					Slug:       rc.Company.Slug,
 					Name:       rc.Company.Name,
@@ -94,7 +94,7 @@ func (h *Handlers) HandleGetContactAPI() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ContactResponse{
+		json.NewEncoder(w).Encode(contactResponse{
 			ID:          details.Contact.ID,
 			Name:        details.Contact.Name,
 			Org:         details.Contact.Org,
@@ -108,17 +108,17 @@ func (h *Handlers) HandleGetContactAPI() http.HandlerFunc {
 	}
 }
 
-// LinkContactRoleRequest is the request body for linking a role to a contact
-type LinkContactRoleRequest struct {
+// linkContactRoleRequest is the request body for linking a role to a contact
+type linkContactRoleRequest struct {
 	RoleRef string `json:"role_ref"` // Format: "companySlug/roleSlug"
 }
 
 // HandleLinkRoleToContactAPI handles POST /api/contacts/{id}/roles
-func (h *Handlers) HandleLinkRoleToContactAPI() http.HandlerFunc {
+func (h *handlers) HandleLinkRoleToContactAPI() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		contactID := chi.URLParam(r, "id")
 
-		var req LinkContactRoleRequest
+		var req linkContactRoleRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
@@ -148,18 +148,18 @@ func (h *Handlers) HandleLinkRoleToContactAPI() http.HandlerFunc {
 	}
 }
 
-// CreateContactMeetingRequest is the request body for creating a contact meeting
-type CreateContactMeetingRequest struct {
+// createContactMeetingRequest is the request body for creating a contact meeting
+type createContactMeetingRequest struct {
 	OccurredAt string `json:"occurred_at"`
 	Title      string `json:"title"`
 }
 
 // HandleCreateContactMeetingAPI handles POST /api/contacts/{id}/meetings
-func (h *Handlers) HandleCreateContactMeetingAPI() http.HandlerFunc {
+func (h *handlers) HandleCreateContactMeetingAPI() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		contactID := chi.URLParam(r, "id")
 
-		var req CreateContactMeetingRequest
+		var req createContactMeetingRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
@@ -181,7 +181,7 @@ func (h *Handlers) HandleCreateContactMeetingAPI() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(MeetingResponse{
+		json.NewEncoder(w).Encode(meetingResponse{
 			ID:         meeting.ID,
 			OccurredAt: meeting.OccurredAt.Format(time.RFC3339),
 			Title:      meeting.Title,
@@ -191,7 +191,7 @@ func (h *Handlers) HandleCreateContactMeetingAPI() http.HandlerFunc {
 }
 
 // HandleContactsPage handles GET /contacts (HTML page)
-func (h *Handlers) HandleContactsPage() http.HandlerFunc {
+func (h *handlers) HandleContactsPage() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		contacts, err := h.contactService.ListContacts(r.Context())
 		if err != nil {
@@ -217,7 +217,7 @@ func (h *Handlers) HandleContactsPage() http.HandlerFunc {
 }
 
 // HandleContactPage handles GET /contacts/{id} (HTML page)
-func (h *Handlers) HandleContactPage() http.HandlerFunc {
+func (h *handlers) HandleContactPage() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 
@@ -284,7 +284,7 @@ func (h *Handlers) HandleContactPage() http.HandlerFunc {
 }
 
 // HandleLinkRoleToContactForm handles POST /contacts/{id}/roles/link (HTML form)
-func (h *Handlers) HandleLinkRoleToContactForm() http.HandlerFunc {
+func (h *handlers) HandleLinkRoleToContactForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		contactID := chi.URLParam(r, "id")
 
@@ -320,7 +320,7 @@ func (h *Handlers) HandleLinkRoleToContactForm() http.HandlerFunc {
 }
 
 // HandleCreateContactMeetingForm handles POST /contacts/{id}/meetings/new (HTML form)
-func (h *Handlers) HandleCreateContactMeetingForm() http.HandlerFunc {
+func (h *handlers) HandleCreateContactMeetingForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		contactID := chi.URLParam(r, "id")
 		redirectURL := "/contacts/" + contactID
@@ -355,7 +355,7 @@ func (h *Handlers) HandleCreateContactMeetingForm() http.HandlerFunc {
 }
 
 // HandleCreateContactForm handles POST /contacts/new (HTML form)
-func (h *Handlers) HandleCreateContactForm() http.HandlerFunc {
+func (h *handlers) HandleCreateContactForm() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			http.Redirect(w, r, "/contacts?error=Invalid+form+data", http.StatusSeeOther)

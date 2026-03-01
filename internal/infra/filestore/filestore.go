@@ -18,18 +18,18 @@ var (
 	multiDashRegexp = regexp.MustCompile(`-+`)
 )
 
-// FileStore implements ports.FileStore using the local filesystem
-type FileStore struct {
+// fileStore implements ports.FileStore using the local filesystem
+type fileStore struct {
 	repoRoot string
 }
 
-// New creates a new FileStore
-func New(repoRoot string) *FileStore {
-	return &FileStore{repoRoot: repoRoot}
+// New creates a new fileStore
+func New(repoRoot string) *fileStore {
+	return &fileStore{repoRoot: repoRoot}
 }
 
 // CreateCompanyFolder creates the company folder and company.md
-func (fs *FileStore) CreateCompanyFolder(ctx context.Context, slug string) (string, error) {
+func (fs *fileStore) CreateCompanyFolder(ctx context.Context, slug string) (string, error) {
 	folderPath := filepath.Join("data", "companies", slug)
 	absPath := filepath.Join(fs.repoRoot, folderPath)
 
@@ -58,7 +58,7 @@ func (fs *FileStore) CreateCompanyFolder(ctx context.Context, slug string) (stri
 }
 
 // CreateRoleFolder creates the role folder structure
-func (fs *FileStore) CreateRoleFolder(ctx context.Context, companySlug, roleSlug string) (string, error) {
+func (fs *fileStore) CreateRoleFolder(ctx context.Context, companySlug, roleSlug string) (string, error) {
 	folderPath := filepath.Join("data", "companies", companySlug, "roles", roleSlug)
 	absPath := filepath.Join(fs.repoRoot, folderPath)
 
@@ -71,7 +71,7 @@ func (fs *FileStore) CreateRoleFolder(ctx context.Context, companySlug, roleSlug
 
 // CreateRoleMeetingNote creates a meeting note file for a role meeting
 // Path: data/companies/<company>/roles/<role>/meetings/<YYYY-MM-DD>_<title>_<id>.md
-func (fs *FileStore) CreateRoleMeetingNote(ctx context.Context, companySlug, roleSlug, occurredAt, title, meetingID string) (string, error) {
+func (fs *fileStore) CreateRoleMeetingNote(ctx context.Context, companySlug, roleSlug, occurredAt, title, meetingID string) (string, error) {
 	// Format: YYYY-MM-DD_<title>_<id>.md
 	safeTitle := strings.ReplaceAll(title, " ", "-")
 	safeTitle = strings.ReplaceAll(safeTitle, "/", "-")
@@ -104,7 +104,7 @@ occurred_at: %s
 }
 
 // CreateContactFolder creates the contact folder
-func (fs *FileStore) CreateContactFolder(ctx context.Context, slug string) (string, error) {
+func (fs *fileStore) CreateContactFolder(ctx context.Context, slug string) (string, error) {
 	folderPath := filepath.Join("data", "contacts", slug)
 	absPath := filepath.Join(fs.repoRoot, folderPath)
 
@@ -117,7 +117,7 @@ func (fs *FileStore) CreateContactFolder(ctx context.Context, slug string) (stri
 
 // CreateContactMeetingNote creates a meeting note file for a contact meeting
 // Path: data/contacts/<slug>/<YYYY-MM-DD>_<title>_<id>.md
-func (fs *FileStore) CreateContactMeetingNote(ctx context.Context, contactSlug string, occurredAt time.Time, title, meetingID string) (string, error) {
+func (fs *fileStore) CreateContactMeetingNote(ctx context.Context, contactSlug string, occurredAt time.Time, title, meetingID string) (string, error) {
 	safeTitle := strings.ReplaceAll(title, " ", "-")
 	safeTitle = strings.ReplaceAll(safeTitle, "/", "-")
 	filename := fmt.Sprintf("%s_%s_%s.md", occurredAt.Format("2006-01-02"), safeTitle, meetingID)
@@ -148,7 +148,7 @@ occurred_at: %s
 }
 
 // MoveFile moves a file from oldPath to newPath (both relative to repoRoot)
-func (fs *FileStore) MoveFile(ctx context.Context, oldPath, newPath string) error {
+func (fs *fileStore) MoveFile(ctx context.Context, oldPath, newPath string) error {
 	absOld := filepath.Join(fs.repoRoot, oldPath)
 	absNew := filepath.Join(fs.repoRoot, newPath)
 
@@ -164,7 +164,7 @@ func (fs *FileStore) MoveFile(ctx context.Context, oldPath, newPath string) erro
 }
 
 // SaveJobDescriptionHTML saves the HTML job description
-func (fs *FileStore) SaveJobDescriptionHTML(ctx context.Context, companySlug, roleSlug string, content string) (string, error) {
+func (fs *fileStore) SaveJobDescriptionHTML(ctx context.Context, companySlug, roleSlug string, content string) (string, error) {
 	filePath := filepath.Join("data", "companies", companySlug, "roles", roleSlug, "job.html")
 	absPath := filepath.Join(fs.repoRoot, filePath)
 
@@ -176,7 +176,7 @@ func (fs *FileStore) SaveJobDescriptionHTML(ctx context.Context, companySlug, ro
 }
 
 // SaveJobDescriptionPDF saves the PDF job description
-func (fs *FileStore) SaveJobDescriptionPDF(ctx context.Context, companySlug, roleSlug string, content io.Reader) (string, error) {
+func (fs *fileStore) SaveJobDescriptionPDF(ctx context.Context, companySlug, roleSlug string, content io.Reader) (string, error) {
 	filePath := filepath.Join("data", "companies", companySlug, "roles", roleSlug, "job.pdf")
 	absPath := filepath.Join(fs.repoRoot, filePath)
 
@@ -194,7 +194,7 @@ func (fs *FileStore) SaveJobDescriptionPDF(ctx context.Context, companySlug, rol
 }
 
 // ReadFile reads the content of a file at the given relative path
-func (fs *FileStore) ReadFile(ctx context.Context, path string) (string, error) {
+func (fs *fileStore) ReadFile(ctx context.Context, path string) (string, error) {
 	absPath := filepath.Join(fs.repoRoot, path)
 
 	content, err := os.ReadFile(absPath)
@@ -206,7 +206,7 @@ func (fs *FileStore) ReadFile(ctx context.Context, path string) (string, error) 
 }
 
 // SaveRoleResumeJSON saves the resume JSON data for a role
-func (fs *FileStore) SaveRoleResumeJSON(ctx context.Context, companySlug, roleSlug string, content string) (string, error) {
+func (fs *fileStore) SaveRoleResumeJSON(ctx context.Context, companySlug, roleSlug string, content string) (string, error) {
 	// Create resume folder if it doesn't exist
 	resumeDir := filepath.Join("data", "companies", companySlug, "roles", roleSlug, "resume")
 	absResumeDir := filepath.Join(fs.repoRoot, resumeDir)
@@ -225,7 +225,7 @@ func (fs *FileStore) SaveRoleResumeJSON(ctx context.Context, companySlug, roleSl
 }
 
 // SaveRoleResumePDF saves the resume PDF for a role
-func (fs *FileStore) SaveRoleResumePDF(ctx context.Context, companySlug, roleSlug string, content io.Reader) (string, error) {
+func (fs *fileStore) SaveRoleResumePDF(ctx context.Context, companySlug, roleSlug string, content io.Reader) (string, error) {
 	// Create resume folder if it doesn't exist
 	resumeDir := filepath.Join("data", "companies", companySlug, "roles", roleSlug, "resume")
 	absResumeDir := filepath.Join(fs.repoRoot, resumeDir)
@@ -281,7 +281,7 @@ func extensionForType(artifactType string) string {
 }
 
 // SaveRoleArtifact saves an artifact file for a role
-func (fs *FileStore) SaveRoleArtifact(ctx context.Context, companySlug, roleSlug, artifactName, artifactType, fileExtension string, content io.Reader) (string, error) {
+func (fs *fileStore) SaveRoleArtifact(ctx context.Context, companySlug, roleSlug, artifactName, artifactType, fileExtension string, content io.Reader) (string, error) {
 	artifactsDir := filepath.Join("data", "companies", companySlug, "roles", roleSlug, "artifacts")
 	absArtifactsDir := filepath.Join(fs.repoRoot, artifactsDir)
 	if err := os.MkdirAll(absArtifactsDir, 0755); err != nil {
@@ -311,7 +311,7 @@ func (fs *FileStore) SaveRoleArtifact(ctx context.Context, companySlug, roleSlug
 }
 
 // ReadFileBytes reads the raw bytes of a file at the given relative path
-func (fs *FileStore) ReadFileBytes(ctx context.Context, path string) ([]byte, error) {
+func (fs *fileStore) ReadFileBytes(ctx context.Context, path string) ([]byte, error) {
 	absPath := filepath.Join(fs.repoRoot, path)
 	content, err := os.ReadFile(absPath)
 	if err != nil {
@@ -321,7 +321,7 @@ func (fs *FileStore) ReadFileBytes(ctx context.Context, path string) ([]byte, er
 }
 
 // DeleteFile deletes a file at the given relative path
-func (fs *FileStore) DeleteFile(ctx context.Context, path string) error {
+func (fs *fileStore) DeleteFile(ctx context.Context, path string) error {
 	absPath := filepath.Join(fs.repoRoot, path)
 	err := os.Remove(absPath)
 	if err != nil && !os.IsNotExist(err) {

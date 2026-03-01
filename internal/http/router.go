@@ -8,14 +8,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// Server holds HTTP server dependencies
-type Server struct {
+// server holds HTTP server dependencies
+type server struct {
 	router   *chi.Mux
-	handlers *Handlers
+	handlers *handlers
 }
 
 // NewServer creates a new HTTP server
-func NewServer(handlers *Handlers) *Server {
+func NewServer(handlers *handlers) *server {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -23,7 +23,7 @@ func NewServer(handlers *Handlers) *Server {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 
-	s := &Server{
+	s := &server{
 		router:   r,
 		handlers: handlers,
 	}
@@ -32,7 +32,7 @@ func NewServer(handlers *Handlers) *Server {
 	return s
 }
 
-func (s *Server) routes() {
+func (s *server) routes() {
 	// Health check
 	s.router.Get("/health", s.handleHealth())
 
@@ -88,7 +88,7 @@ func (s *Server) routes() {
 	s.router.Post("/export", s.handlers.HandleExportPage())
 }
 
-func (s *Server) handleHealth() http.HandlerFunc {
+func (s *server) handleHealth() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -96,11 +96,11 @@ func (s *Server) handleHealth() http.HandlerFunc {
 }
 
 // ServeHTTP implements http.Handler
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.ServeHTTP(w, r)
 }
 
 // Router returns the chi router for testing
-func (s *Server) Router() *chi.Mux {
+func (s *server) Router() *chi.Mux {
 	return s.router
 }

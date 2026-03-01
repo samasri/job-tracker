@@ -9,18 +9,18 @@ import (
 	"jobtracker/internal/domain"
 )
 
-// RoleRepo implements ports.RoleRepository
-type RoleRepo struct {
+// roleRepo implements ports.RoleRepository
+type roleRepo struct {
 	db *DB
 }
 
-// NewRoleRepo creates a new RoleRepo
-func NewRoleRepo(db *DB) *RoleRepo {
-	return &RoleRepo{db: db}
+// NewRoleRepo creates a new roleRepo
+func NewRoleRepo(db *DB) *roleRepo {
+	return &roleRepo{db: db}
 }
 
 // Create inserts a new role
-func (r *RoleRepo) Create(ctx context.Context, role *domain.Role) error {
+func (r *roleRepo) Create(ctx context.Context, role *domain.Role) error {
 	now := time.Now()
 	role.CreatedAt = now
 	role.UpdatedAt = now
@@ -43,7 +43,7 @@ func (r *RoleRepo) Create(ctx context.Context, role *domain.Role) error {
 }
 
 // GetBySlug retrieves a role by company ID and slug
-func (r *RoleRepo) GetBySlug(ctx context.Context, companyID, slug string) (*domain.Role, error) {
+func (r *roleRepo) GetBySlug(ctx context.Context, companyID, slug string) (*domain.Role, error) {
 	role := &domain.Role{}
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, company_id, slug, title, status, folder_path, created_at, updated_at
@@ -61,7 +61,7 @@ func (r *RoleRepo) GetBySlug(ctx context.Context, companyID, slug string) (*doma
 }
 
 // GetByID retrieves a role by ID
-func (r *RoleRepo) GetByID(ctx context.Context, id string) (*domain.Role, error) {
+func (r *roleRepo) GetByID(ctx context.Context, id string) (*domain.Role, error) {
 	role := &domain.Role{}
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, company_id, slug, title, status, folder_path, created_at, updated_at
@@ -79,7 +79,7 @@ func (r *RoleRepo) GetByID(ctx context.Context, id string) (*domain.Role, error)
 }
 
 // ListByCompany retrieves all roles for a company ordered by created_at ASC, id ASC
-func (r *RoleRepo) ListByCompany(ctx context.Context, companyID string) ([]*domain.Role, error) {
+func (r *roleRepo) ListByCompany(ctx context.Context, companyID string) ([]*domain.Role, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, company_id, slug, title, status, folder_path, created_at, updated_at
 		 FROM roles WHERE company_id = ? ORDER BY created_at ASC, id ASC`, companyID)
@@ -102,7 +102,7 @@ func (r *RoleRepo) ListByCompany(ctx context.Context, companyID string) ([]*doma
 }
 
 // UpdateStatus updates the status of a role
-func (r *RoleRepo) UpdateStatus(ctx context.Context, roleID string, status domain.RoleStatus) error {
+func (r *roleRepo) UpdateStatus(ctx context.Context, roleID string, status domain.RoleStatus) error {
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE roles SET status = ?, updated_at = ? WHERE id = ?`,
 		status, time.Now(), roleID)

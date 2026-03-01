@@ -9,18 +9,18 @@ import (
 	"jobtracker/internal/domain"
 )
 
-// CompanyRepo implements ports.CompanyRepository
-type CompanyRepo struct {
+// companyRepo implements ports.CompanyRepository
+type companyRepo struct {
 	db *DB
 }
 
-// NewCompanyRepo creates a new CompanyRepo
-func NewCompanyRepo(db *DB) *CompanyRepo {
-	return &CompanyRepo{db: db}
+// NewCompanyRepo creates a new companyRepo
+func NewCompanyRepo(db *DB) *companyRepo {
+	return &companyRepo{db: db}
 }
 
 // Create inserts a new company
-func (r *CompanyRepo) Create(ctx context.Context, company *domain.Company) error {
+func (r *companyRepo) Create(ctx context.Context, company *domain.Company) error {
 	now := time.Now()
 	company.CreatedAt = now
 	company.UpdatedAt = now
@@ -38,7 +38,7 @@ func (r *CompanyRepo) Create(ctx context.Context, company *domain.Company) error
 }
 
 // GetBySlug retrieves a company by slug
-func (r *CompanyRepo) GetBySlug(ctx context.Context, slug string) (*domain.Company, error) {
+func (r *companyRepo) GetBySlug(ctx context.Context, slug string) (*domain.Company, error) {
 	company := &domain.Company{}
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, slug, name, folder_path, created_at, updated_at
@@ -56,7 +56,7 @@ func (r *CompanyRepo) GetBySlug(ctx context.Context, slug string) (*domain.Compa
 }
 
 // GetByID retrieves a company by ID
-func (r *CompanyRepo) GetByID(ctx context.Context, id string) (*domain.Company, error) {
+func (r *companyRepo) GetByID(ctx context.Context, id string) (*domain.Company, error) {
 	company := &domain.Company{}
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, slug, name, folder_path, created_at, updated_at
@@ -74,7 +74,7 @@ func (r *CompanyRepo) GetByID(ctx context.Context, id string) (*domain.Company, 
 }
 
 // List retrieves all companies ordered by name
-func (r *CompanyRepo) List(ctx context.Context) ([]*domain.Company, error) {
+func (r *companyRepo) List(ctx context.Context) ([]*domain.Company, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, slug, name, folder_path, created_at, updated_at
 		 FROM companies ORDER BY name ASC`)

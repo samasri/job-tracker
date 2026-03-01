@@ -9,18 +9,18 @@ import (
 	"jobtracker/internal/domain"
 )
 
-// JobDescriptionRepo implements ports.JobDescriptionRepository
-type JobDescriptionRepo struct {
+// jobDescriptionRepo implements ports.JobDescriptionRepository
+type jobDescriptionRepo struct {
 	db *DB
 }
 
-// NewJobDescriptionRepo creates a new JobDescriptionRepo
-func NewJobDescriptionRepo(db *DB) *JobDescriptionRepo {
-	return &JobDescriptionRepo{db: db}
+// NewJobDescriptionRepo creates a new jobDescriptionRepo
+func NewJobDescriptionRepo(db *DB) *jobDescriptionRepo {
+	return &jobDescriptionRepo{db: db}
 }
 
 // Save upserts a job description record
-func (r *JobDescriptionRepo) Save(ctx context.Context, jd *domain.RoleJobDescription) error {
+func (r *jobDescriptionRepo) Save(ctx context.Context, jd *domain.RoleJobDescription) error {
 	now := time.Now()
 
 	_, err := r.db.ExecContext(ctx,
@@ -39,7 +39,7 @@ func (r *JobDescriptionRepo) Save(ctx context.Context, jd *domain.RoleJobDescrip
 }
 
 // GetByRoleID retrieves a job description by role ID
-func (r *JobDescriptionRepo) GetByRoleID(ctx context.Context, roleID string) (*domain.RoleJobDescription, error) {
+func (r *jobDescriptionRepo) GetByRoleID(ctx context.Context, roleID string) (*domain.RoleJobDescription, error) {
 	jd := &domain.RoleJobDescription{RoleID: roleID}
 	var pathHTML, pathPDF sql.NullString
 
